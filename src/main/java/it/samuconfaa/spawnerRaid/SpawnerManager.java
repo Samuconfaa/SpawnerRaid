@@ -109,8 +109,17 @@ public class SpawnerManager {
     }
 
     public int activateSpawnersInWorld(World world) {
-        int activated = 0;
+        // Prima controlla se ci sono spawner in memoria per questo mondo
+        boolean hasSpawnersInWorld = spawners.values().stream()
+                .anyMatch(spawner -> spawner.getLocation().getWorld().equals(world));
 
+        // Se non ci sono spawner in memoria per questo mondo, prova a ricaricare dal file
+        if (!hasSpawnersInWorld) {
+            plugin.getLogger().info("Nessuno spawner trovato in memoria per il mondo '" + world.getName() + "', ricarico dal file...");
+            loadSpawnersForWorld(world);
+        }
+
+        int activated = 0;
         for (CustomSpawner spawner : spawners.values()) {
             if (spawner.getLocation().getWorld().equals(world)) {
                 spawnMobs(spawner);
@@ -119,6 +128,37 @@ public class SpawnerManager {
         }
 
         return activated;
+    }
+
+    // Nuovo metodo per caricare solo gli spawner di un mondo specifico
+    private void loadSpawnersForWorld(World world) {
+        spawnersConfig = YamlConfiguration.loadConfiguration(spawnersFile);
+
+        ConfigurationSection spawnersSection = spawnersConfig.getConfigurationSection("spawners");
+        if (spawnersSection == null) return;
+
+        for (String name : spawnersSection.getKeys(false)) {
+            // Salta se lo spawner è già in memoria
+            if (spawners.containsKey(name)) continue;
+
+            ConfigurationSection section = spawnersSection.getConfigurationSection(name);
+            String worldName = section.getString("world");
+
+            // Carica solo gli spawner del mondo specificato
+            if (!world.getName().equals(worldName)) continue;
+
+            double x = section.getDouble("x");
+            double y = section.getDouble("y");
+            double z = section.getDouble("z");
+            String mobType = section.getString("mobType");
+            int quantity = section.getInt("quantity");
+
+            Location location = new Location(world, x, y, z);
+            CustomSpawner spawner = new CustomSpawner(name, location, mobType, quantity);
+
+            spawners.put(name, spawner);
+            plugin.getLogger().info("Ricaricato spawner '" + name + "' per il mondo '" + worldName + "'");
+        }
     }
 
     private void spawnMobs(CustomSpawner spawner) {
