@@ -1,6 +1,10 @@
 package it.samuconfaa.spawnerRaid;
 
 import org.bukkit.plugin.java.JavaPlugin;
+import it.samuconfaa.spawnerRaid.SpawnerCommands;
+import it.samuconfaa.spawnerRaid.SpawnerManager;
+import it.samuconfaa.spawnerRaid.ConfigManager;
+import it.samuconfaa.spawnerRaid.PlayerMoveListener;
 
 public class SpawnerRaid extends JavaPlugin {
 
@@ -16,23 +20,12 @@ public class SpawnerRaid extends JavaPlugin {
         configManager = new ConfigManager(this);
         spawnerManager = new SpawnerManager(this);
 
-        // Crea il TabCompleter
-        SpawnerTabCompleter tabCompleter = new SpawnerTabCompleter(this);
-
-        // Registra i comandi e i loro TabCompleter
+        // Registra i comandi
         SpawnerCommands commandExecutor = new SpawnerCommands(this);
-
         getCommand("setspawner").setExecutor(commandExecutor);
-        getCommand("setspawner").setTabCompleter(tabCompleter);
-
         getCommand("attivaspawner").setExecutor(commandExecutor);
-        getCommand("attivaspawner").setTabCompleter(tabCompleter);
-
         getCommand("eliminaspawner").setExecutor(commandExecutor);
-        getCommand("eliminaspawner").setTabCompleter(tabCompleter);
-
         getCommand("debugspawners").setExecutor(commandExecutor);
-        getCommand("debugspawners").setTabCompleter(tabCompleter);
 
         // Registra i listener
         getServer().getPluginManager().registerEvents(new PlayerMoveListener(this), this);
