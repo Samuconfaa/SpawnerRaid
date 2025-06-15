@@ -1,0 +1,47 @@
+name: SpawnerRaid
+version: 1.0.0
+main: it.samuconfaa.spawnerRaid.SpawnerRaid
+api-version: 1.21
+author: SamuConfaa
+description: Plugin per gestire spawner di MythicMobs con sistema di raid
+depend: [MythicMobs]
+
+commands:
+  setspawner:
+    description: Crea un nuovo spawner
+    usage: /setspawner <nome> <mob_mythic> <quantità>
+    permission: spawnerraid.setspawner
+    permission-message: §cNon hai il permesso per utilizzare questo comando!
+
+  attivaspawner:
+    description: Attiva gli spawner in un mondo
+    usage: /attivaspawner <nome_mondo>
+    permission: spawnerraid.activate
+    permission-message: §cNon hai il permesso per utilizzare questo comando!
+
+  eliminaspawner:
+    description: Elimina uno spawner esistente
+    usage: /eliminaspawner <nome>
+    permission: spawnerraid.remove
+    permission-message: §cNon hai il permesso per utilizzare questo comando!
+
+permissions:
+  spawnerraid.*:
+    description: Accesso completo a tutti i comandi di SpawnerRaid
+    children:
+      spawnerraid.setspawner: true
+      spawnerraid.activate: true
+      spawnerraid.remove: true
+    default: op
+
+  spawnerraid.setspawner:
+    description: Permesso per creare spawner
+    default: op
+
+  spawnerraid.activate:
+    description: Permesso per attivare spawner
+    default: op
+
+  spawnerraid.remove:
+    description: Permesso per eliminare spawner
+    default: op

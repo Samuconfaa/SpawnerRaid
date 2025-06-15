@@ -1,0 +1,27 @@
+# Configurazione SpawnerRaid Plugin
+# Distanza in blocchi entro cui i mob si attivano quando un giocatore si avvicina
+activation-distance: 10.0
+
+# Messaggi del plugin
+messages:
+  spawner-created: "&aSpawner '{name}' creato con successo!"
+  spawner-removed: "&aSpawner '{name}' eliminato con successo!"
+  spawner-not-found: "&cSpawner '{name}' non trovato!"
+  spawners-activated: "&aAttivati {count} spawner nel mondo '{world}'!"
+  no-spawners-found: "&eNessuno spawner trovato nel mondo '{world}'!"
+  mob-not-exists: "&cIl mob MythicMobs '{mob}' non esiste!"
+  spawner-already-exists: "&cEsiste già uno spawner con il nome '{name}'!"
+  world-not-found: "&cIl mondo '{world}' non esiste!"
+  invalid-quantity: "&cLa quantità deve essere un numero maggiore di 0!"
+  only-players: "&cQuesto comando può essere eseguito solo da un giocatore!"
+
+# Impostazioni avanzate
+settings:
+  # Salvataggio automatico degli spawner (in secondi, 0 per disabilitare)
+  auto-save-interval: 300
+
+  # Massimo numero di spawner per mondo
+  max-spawners-per-world: 50
+
+  # Debug mode per logging aggiuntivo
+  debug: false
