@@ -6,13 +6,18 @@ import org.bukkit.World;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
+import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
 import org.bukkit.ChatColor;
 import it.samuconfaa.spawnerRaid.SpawnerRaid;
 import it.samuconfaa.spawnerRaid.CustomSpawner;
 import io.lumine.mythic.bukkit.MythicBukkit;
 
-public class SpawnerCommands implements CommandExecutor {
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Collectors;
+
+public class SpawnerCommands implements CommandExecutor, TabCompleter {
 
     private final SpawnerRaid plugin;
 
@@ -37,6 +42,94 @@ public class SpawnerCommands implements CommandExecutor {
         }
     }
 
+    @Override
+    public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
+        List<String> completions = new ArrayList<>();
+
+        switch (command.getName().toLowerCase()) {
+            case "setspawner":
+                return getSetSpawnerCompletions(args);
+            case "attivaspawner":
+                return getAttivaSpawnerCompletions(args);
+            case "eliminaspawner":
+                return getEliminaSpawnerCompletions(args);
+            case "debugspawners":
+                // Nessun argomento per debug
+                return completions;
+            default:
+                return completions;
+        }
+    }
+
+    private List<String> getSetSpawnerCompletions(String[] args) {
+        List<String> completions = new ArrayList<>();
+
+        if (args.length == 1) {
+            // Suggerimenti per nomi spawner (3 nomi casuali)
+            completions.add("spawner_" + (System.currentTimeMillis() % 1000));
+            completions.add("raid_spawner_" + (int)(Math.random() * 999 + 1));
+            completions.add("mob_spawner_" + (int)(Math.random() * 999 + 1));
+
+            // Filtra in base a quello che ha già scritto l'utente
+            return completions.stream()
+                    .filter(name -> name.toLowerCase().startsWith(args[0].toLowerCase()))
+                    .collect(Collectors.toList());
+
+        } else if (args.length == 2) {
+            // Suggerimenti per nomi mob MythicMobs
+            try {
+                completions = MythicBukkit.inst().getMobManager().getMobNames()
+                        .stream()
+                        .filter(name -> name.toLowerCase().startsWith(args[1].toLowerCase()))
+                        .collect(Collectors.toList());
+            } catch (Exception e) {
+                // Fallback se non riesce a ottenere i nomi dei mob
+                completions.add("SkeletonKing");
+                completions.add("ZombieMinion");
+                completions.add("CustomBoss");
+                completions.add("FireDragon");
+                completions.add("IceGolem");
+            }
+
+        } else if (args.length == 3) {
+            // Suggerimenti per quantità (5 quantità random)
+            completions.add("1");
+            completions.add("5");
+            completions.add("10");
+            completions.add("25");
+            completions.add("50");
+        }
+
+        return completions;
+    }
+
+    private List<String> getAttivaSpawnerCompletions(String[] args) {
+        List<String> completions = new ArrayList<>();
+
+        if (args.length == 1) {
+            // Suggerimenti per nomi dei mondi
+            completions = Bukkit.getWorlds().stream()
+                    .map(World::getName)
+                    .filter(worldName -> worldName.toLowerCase().startsWith(args[0].toLowerCase()))
+                    .collect(Collectors.toList());
+        }
+
+        return completions;
+    }
+
+    private List<String> getEliminaSpawnerCompletions(String[] args) {
+        List<String> completions = new ArrayList<>();
+
+        if (args.length == 1) {
+            // Suggerimenti per nomi degli spawner esistenti
+            completions = plugin.getSpawnerManager().getAllSpawners().stream()
+                    .map(CustomSpawner::getName)
+                    .filter(spawnerName -> spawnerName.toLowerCase().startsWith(args[0].toLowerCase()))
+                    .collect(Collectors.toList());
+        }
+
+        return completions;
+    }
 
     private boolean handleDebugSpawners(CommandSender sender, String[] args) {
         if (!sender.hasPermission("spawnerraid.debug")) {
@@ -61,9 +154,6 @@ public class SpawnerCommands implements CommandExecutor {
 
         return true;
     }
-
-
-
 
     private boolean handleSetSpawner(CommandSender sender, String[] args) {
         if (!(sender instanceof Player)) {

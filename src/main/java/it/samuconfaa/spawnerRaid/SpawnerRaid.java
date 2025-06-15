@@ -20,12 +20,21 @@ public class SpawnerRaid extends JavaPlugin {
         configManager = new ConfigManager(this);
         spawnerManager = new SpawnerManager(this);
 
-        // Registra i comandi
+        // Registra i comandi con TabCompleter
         SpawnerCommands commandExecutor = new SpawnerCommands(this);
+
+        // Registra CommandExecutor e TabCompleter per ogni comando
         getCommand("setspawner").setExecutor(commandExecutor);
+        getCommand("setspawner").setTabCompleter(commandExecutor);
+
         getCommand("attivaspawner").setExecutor(commandExecutor);
+        getCommand("attivaspawner").setTabCompleter(commandExecutor);
+
         getCommand("eliminaspawner").setExecutor(commandExecutor);
+        getCommand("eliminaspawner").setTabCompleter(commandExecutor);
+
         getCommand("debugspawners").setExecutor(commandExecutor);
+        getCommand("debugspawners").setTabCompleter(commandExecutor);
 
         // Registra i listener
         getServer().getPluginManager().registerEvents(new PlayerMoveListener(this), this);
