@@ -109,57 +109,135 @@ public class SpawnerManager {
     }
 
     public int activateSpawnersInWorld(World world) {
-        // Prima controlla se ci sono spawner in memoria per questo mondo
-        boolean hasSpawnersInWorld = spawners.values().stream()
-                .anyMatch(spawner -> spawner.getLocation().getWorld().equals(world));
+        plugin.getLogger().info("Tentativo di attivazione spawner nel mondo: " + world.getName());
+
+        // Prima controlla se ci sono spawner in memoria per questo mondo (confronta per NOME, non per oggetto)
+        long spawnersInWorldCount = spawners.values().stream()
+                .filter(spawner -> spawner.getLocation().getWorld().getName().equals(world.getName()))
+                .count();
+
+        plugin.getLogger().info("Spawner in memoria per il mondo '" + world.getName() + "': " + spawnersInWorldCount);
+
+        // Se gli spawner esistono ma hanno un riferimento al mondo vecchio, aggiornali
+        boolean needsWorldUpdate = false;
+        for (CustomSpawner spawner : new ArrayList<>(spawners.values())) {
+            if (spawner.getLocation().getWorld().getName().equals(world.getName()) &&
+                    !spawner.getLocation().getWorld().equals(world)) {
+                plugin.getLogger().info("Spawner '" + spawner.getName() + "' ha riferimento mondo obsoleto, aggiorno...");
+                needsWorldUpdate = true;
+
+                // Rimuovi il vecchio e aggiungi con il nuovo riferimento mondo
+                spawners.remove(spawner.getName());
+                Location newLocation = new Location(world,
+                        spawner.getLocation().getX(),
+                        spawner.getLocation().getY(),
+                        spawner.getLocation().getZ());
+                CustomSpawner updatedSpawner = new CustomSpawner(
+                        spawner.getName(),
+                        newLocation,
+                        spawner.getMobType(),
+                        spawner.getQuantity());
+                spawners.put(updatedSpawner.getName(), updatedSpawner);
+                plugin.getLogger().info("Spawner '" + spawner.getName() + "' aggiornato con nuovo riferimento mondo");
+            }
+        }
 
         // Se non ci sono spawner in memoria per questo mondo, prova a ricaricare dal file
-        if (!hasSpawnersInWorld) {
+        if (spawnersInWorldCount == 0 && !needsWorldUpdate) {
             plugin.getLogger().info("Nessuno spawner trovato in memoria per il mondo '" + world.getName() + "', ricarico dal file...");
             loadSpawnersForWorld(world);
         }
 
+        // Ricontrolla dopo eventuali aggiornamenti
+        spawnersInWorldCount = spawners.values().stream()
+                .filter(spawner -> spawner.getLocation().getWorld().getName().equals(world.getName()))
+                .count();
+
+        plugin.getLogger().info("Spawner finali per il mondo '" + world.getName() + "': " + spawnersInWorldCount);
+
         int activated = 0;
         for (CustomSpawner spawner : spawners.values()) {
-            if (spawner.getLocation().getWorld().equals(world)) {
+            // Confronta per nome mondo, non per oggetto World
+            if (spawner.getLocation().getWorld().getName().equals(world.getName())) {
+                plugin.getLogger().info("Attivando spawner: " + spawner.getName() + " nel mondo: " + world.getName());
                 spawnMobs(spawner);
                 activated++;
             }
         }
 
+        plugin.getLogger().info("Totale spawner attivati nel mondo '" + world.getName() + "': " + activated);
         return activated;
     }
 
-    // Nuovo metodo per caricare solo gli spawner di un mondo specifico
+    // Metodo migliorato per caricare solo gli spawner di un mondo specifico
     private void loadSpawnersForWorld(World world) {
+        plugin.getLogger().info("Tentativo di caricamento spawner per il mondo: " + world.getName());
+
+        // Ricarica sempre il file per essere sicuri di avere i dati più recenti
         spawnersConfig = YamlConfiguration.loadConfiguration(spawnersFile);
 
         ConfigurationSection spawnersSection = spawnersConfig.getConfigurationSection("spawners");
-        if (spawnersSection == null) return;
+        if (spawnersSection == null) {
+            plugin.getLogger().warning("Sezione 'spawners' non trovata nel file spawners.yml");
+            return;
+        }
 
+        plugin.getLogger().info("Spawner trovati nel file: " + spawnersSection.getKeys(false).size());
+
+        int loadedCount = 0;
         for (String name : spawnersSection.getKeys(false)) {
-            // Salta se lo spawner è già in memoria
-            if (spawners.containsKey(name)) continue;
+            plugin.getLogger().info("Processando spawner: " + name);
 
             ConfigurationSection section = spawnersSection.getConfigurationSection(name);
+            if (section == null) {
+                plugin.getLogger().warning("Sezione spawner '" + name + "' è null");
+                continue;
+            }
+
             String worldName = section.getString("world");
+            plugin.getLogger().info("Spawner '" + name + "' è nel mondo: " + worldName + " (cercando: " + world.getName() + ")");
 
             // Carica solo gli spawner del mondo specificato
-            if (!world.getName().equals(worldName)) continue;
+            if (!world.getName().equals(worldName)) {
+                plugin.getLogger().info("Spawner '" + name + "' saltato perché in mondo diverso");
+                continue;
+            }
 
-            double x = section.getDouble("x");
-            double y = section.getDouble("y");
-            double z = section.getDouble("z");
-            String mobType = section.getString("mobType");
-            int quantity = section.getInt("quantity");
+            // Controlla se lo spawner esiste già (confronta per nome mondo, non oggetto)
+            boolean alreadyExists = spawners.values().stream()
+                    .anyMatch(existing -> existing.getName().equals(name) &&
+                            existing.getLocation().getWorld().getName().equals(worldName));
 
-            Location location = new Location(world, x, y, z);
-            CustomSpawner spawner = new CustomSpawner(name, location, mobType, quantity);
+            if (alreadyExists) {
+                plugin.getLogger().info("Spawner '" + name + "' già presente in memoria per questo mondo, saltato");
+                continue;
+            }
 
-            spawners.put(name, spawner);
-            plugin.getLogger().info("Ricaricato spawner '" + name + "' per il mondo '" + worldName + "'");
+            try {
+                double x = section.getDouble("x");
+                double y = section.getDouble("y");
+                double z = section.getDouble("z");
+                String mobType = section.getString("mobType");
+                int quantity = section.getInt("quantity");
+
+                plugin.getLogger().info("Caricamento spawner '" + name + "' - Posizione: " + x + "," + y + "," + z +
+                        " - Mob: " + mobType + " - Quantità: " + quantity);
+
+                Location location = new Location(world, x, y, z);
+                CustomSpawner spawner = new CustomSpawner(name, location, mobType, quantity);
+
+                spawners.put(name, spawner);
+                loadedCount++;
+                plugin.getLogger().info("Spawner '" + name + "' caricato con successo per il mondo '" + worldName + "'");
+            } catch (Exception e) {
+                plugin.getLogger().severe("Errore nel caricamento dello spawner '" + name + "': " + e.getMessage());
+                e.printStackTrace();
+            }
         }
+
+        plugin.getLogger().info("Caricati " + loadedCount + " spawner per il mondo '" + world.getName() + "'");
     }
+
 
     private void spawnMobs(CustomSpawner spawner) {
         Location location = spawner.getLocation();
@@ -204,6 +282,11 @@ public class SpawnerManager {
                 continue;
             }
 
+            // Verifica che il mob sia nello stesso mondo del giocatore (confronta per nome)
+            if (!mob.getWorld().getName().equals(player.getWorld().getName())) {
+                continue;
+            }
+
             if (mob.getLocation().distance(player.getLocation()) <= activationDistance) {
                 if (mob instanceof org.bukkit.entity.LivingEntity) {
                     org.bukkit.entity.LivingEntity livingEntity = (org.bukkit.entity.LivingEntity) mob;
@@ -222,6 +305,18 @@ public class SpawnerManager {
             }
         }
         activeMobs.clear();
+    }
+    public void reloadAllSpawners() {
+        plugin.getLogger().info("Ricaricamento completo di tutti gli spawner...");
+        spawners.clear();
+        loadSpawners();
+        plugin.getLogger().info("Ricaricati tutti gli spawner dal file. Totale in memoria: " + spawners.size());
+
+        // Debug: elenca tutti gli spawner caricati
+        for (CustomSpawner spawner : spawners.values()) {
+            plugin.getLogger().info("Spawner in memoria: " + spawner.getName() + " nel mondo " +
+                    spawner.getLocation().getWorld().getName());
+        }
     }
 
     public Collection<CustomSpawner> getAllSpawners() {

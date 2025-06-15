@@ -25,6 +25,7 @@ public class SpawnerRaid extends JavaPlugin {
         getCommand("setspawner").setExecutor(commandExecutor);
         getCommand("attivaspawner").setExecutor(commandExecutor);
         getCommand("eliminaspawner").setExecutor(commandExecutor);
+        getCommand("debugspawners").setExecutor(commandExecutor);
 
         // Registra i listener
         getServer().getPluginManager().registerEvents(new PlayerMoveListener(this), this);

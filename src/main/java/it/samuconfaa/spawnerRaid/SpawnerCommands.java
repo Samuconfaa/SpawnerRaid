@@ -30,10 +30,40 @@ public class SpawnerCommands implements CommandExecutor {
                 return handleAttivaSpawner(sender, args);
             case "eliminaspawner":
                 return handleEliminaSpawner(sender, args);
+            case "debugspawners":
+                return handleDebugSpawners(sender, args);
             default:
                 return false;
         }
     }
+
+
+    private boolean handleDebugSpawners(CommandSender sender, String[] args) {
+        if (!sender.hasPermission("spawnerraid.debug")) {
+            sender.sendMessage(ChatColor.RED + "Non hai il permesso per utilizzare questo comando!");
+            return true;
+        }
+
+        sender.sendMessage(ChatColor.YELLOW + "=== DEBUG SPAWNERS ===");
+
+        // Mostra spawner in memoria
+        sender.sendMessage(ChatColor.GREEN + "Spawner in memoria: " + plugin.getSpawnerManager().getAllSpawners().size());
+        for (CustomSpawner spawner : plugin.getSpawnerManager().getAllSpawners()) {
+            sender.sendMessage(ChatColor.WHITE + "- " + spawner.getName() + " nel mondo " +
+                    spawner.getLocation().getWorld().getName() + " (" + spawner.getMobType() + " x" + spawner.getQuantity() + ")");
+        }
+
+        // Forza ricaricamento e mostra risultato
+        sender.sendMessage(ChatColor.YELLOW + "Forzando ricaricamento...");
+        plugin.getSpawnerManager().reloadAllSpawners();
+
+        sender.sendMessage(ChatColor.GREEN + "Spawner dopo ricaricamento: " + plugin.getSpawnerManager().getAllSpawners().size());
+
+        return true;
+    }
+
+
+
 
     private boolean handleSetSpawner(CommandSender sender, String[] args) {
         if (!(sender instanceof Player)) {

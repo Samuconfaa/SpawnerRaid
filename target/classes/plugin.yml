@@ -25,6 +25,11 @@ commands:
     permission: spawnerraid.remove
     permission-message: §cNon hai il permesso per utilizzare questo comando!
 
+  debugspawners:
+    description: Debug degli spawner
+    usage: /debugspawners
+    permission: spawnerraid.debug
+
 permissions:
   spawnerraid.*:
     description: Accesso completo a tutti i comandi di SpawnerRaid
@@ -44,4 +49,8 @@ permissions:
 
   spawnerraid.remove:
     description: Permesso per eliminare spawner
+    default: op
+
+  spawnerraid.debug:
+    description: Permesso per il debug degli spawner
     default: op
