@@ -7,10 +7,12 @@ import org.bukkit.World;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Entity;
+import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
 import io.lumine.mythic.bukkit.MythicBukkit;
 import it.samuconfaa.spawnerRaid.SpawnerRaid;
 import it.samuconfaa.spawnerRaid.CustomSpawner;
+import it.samuconfaa.spawnerRaid.CustomSpawner.SpawnerType;
 
 import java.io.File;
 import java.io.IOException;
@@ -67,6 +69,7 @@ public class SpawnerManager {
             section.set("z", loc.getZ());
             section.set("mobType", spawner.getMobType());
             section.set("quantity", spawner.getQuantity());
+            section.set("spawnerType", spawner.getSpawnerType().name()); // Salva il tipo di spawner
         }
 
         try {
@@ -99,8 +102,19 @@ public class SpawnerManager {
             String mobType = section.getString("mobType");
             int quantity = section.getInt("quantity");
 
+            // Carica il tipo di spawner, default a MYTHICMOB per compatibilità con versioni precedenti
+            SpawnerType spawnerType = SpawnerType.MYTHICMOB;
+            String spawnerTypeStr = section.getString("spawnerType");
+            if (spawnerTypeStr != null) {
+                try {
+                    spawnerType = SpawnerType.valueOf(spawnerTypeStr);
+                } catch (IllegalArgumentException e) {
+                    plugin.getLogger().warning("Tipo spawner non valido '" + spawnerTypeStr + "' per lo spawner '" + name + "'. Utilizzando MYTHICMOB come default.");
+                }
+            }
+
             Location location = new Location(world, x, y, z);
-            CustomSpawner spawner = new CustomSpawner(name, location, mobType, quantity);
+            CustomSpawner spawner = new CustomSpawner(name, location, mobType, quantity, spawnerType);
 
             spawners.put(name, spawner);
         }
@@ -136,7 +150,8 @@ public class SpawnerManager {
                         spawner.getName(),
                         newLocation,
                         spawner.getMobType(),
-                        spawner.getQuantity());
+                        spawner.getQuantity(),
+                        spawner.getSpawnerType()); // Mantieni il tipo di spawner
                 spawners.put(updatedSpawner.getName(), updatedSpawner);
                 plugin.getLogger().info("Spawner '" + spawner.getName() + "' aggiornato con nuovo riferimento mondo");
             }
@@ -159,7 +174,7 @@ public class SpawnerManager {
         for (CustomSpawner spawner : spawners.values()) {
             // Confronta per nome mondo, non per oggetto World
             if (spawner.getLocation().getWorld().getName().equals(world.getName())) {
-                plugin.getLogger().info("Attivando spawner: " + spawner.getName() + " nel mondo: " + world.getName());
+                plugin.getLogger().info("Attivando spawner: " + spawner.getName() + " (" + spawner.getSpawnerType() + ") nel mondo: " + world.getName());
                 spawnMobs(spawner);
                 activated++;
             }
@@ -220,11 +235,22 @@ public class SpawnerManager {
                 String mobType = section.getString("mobType");
                 int quantity = section.getInt("quantity");
 
+                // Carica il tipo di spawner
+                SpawnerType spawnerType = SpawnerType.MYTHICMOB;
+                String spawnerTypeStr = section.getString("spawnerType");
+                if (spawnerTypeStr != null) {
+                    try {
+                        spawnerType = SpawnerType.valueOf(spawnerTypeStr);
+                    } catch (IllegalArgumentException e) {
+                        plugin.getLogger().warning("Tipo spawner non valido '" + spawnerTypeStr + "' per lo spawner '" + name + "'. Utilizzando MYTHICMOB come default.");
+                    }
+                }
+
                 plugin.getLogger().info("Caricamento spawner '" + name + "' - Posizione: " + x + "," + y + "," + z +
-                        " - Mob: " + mobType + " - Quantità: " + quantity);
+                        " - Mob: " + mobType + " - Quantità: " + quantity + " - Tipo: " + spawnerType);
 
                 Location location = new Location(world, x, y, z);
-                CustomSpawner spawner = new CustomSpawner(name, location, mobType, quantity);
+                CustomSpawner spawner = new CustomSpawner(name, location, mobType, quantity, spawnerType);
 
                 spawners.put(name, spawner);
                 loadedCount++;
@@ -238,7 +264,6 @@ public class SpawnerManager {
         plugin.getLogger().info("Caricati " + loadedCount + " spawner per il mondo '" + world.getName() + "'");
     }
 
-
     private void spawnMobs(CustomSpawner spawner) {
         Location location = spawner.getLocation();
 
@@ -248,27 +273,46 @@ public class SpawnerManager {
             double offsetZ = (Math.random() - 0.5) * 2;
             Location spawnLoc = location.clone().add(offsetX, 0, offsetZ);
 
-            // Spawn con MythicMobs usando la nuova API
-            try {
-                Entity entity = MythicBukkit.inst().getMobManager()
-                        .spawnMob(spawner.getMobType(), BukkitAdapter.adapt(spawnLoc))
-                        .getEntity().getBukkitEntity();
+            Entity entity = null;
 
-                if (entity != null) {
-                    // Rimuovi l'AI per far rimanere il mob fermo
-                    if (entity instanceof org.bukkit.entity.LivingEntity) {
-                        org.bukkit.entity.LivingEntity livingEntity = (org.bukkit.entity.LivingEntity) entity;
-                        livingEntity.setAI(false);
-                    }
-
-                    // Imposta per non despawnare
-                    entity.setPersistent(true);
-
-                    // Aggiungi alla lista dei mob attivi
-                    activeMobs.add(entity);
+            if (spawner.getSpawnerType() == SpawnerType.VANILLA) {
+                // Spawn di mob vanilla
+                try {
+                    EntityType entityType = EntityType.valueOf(spawner.getMobType().toUpperCase());
+                    entity = spawnLoc.getWorld().spawnEntity(spawnLoc, entityType);
+                    plugin.getLogger().info("Spawnato mob vanilla: " + entityType + " alla posizione " + spawnLoc);
+                } catch (IllegalArgumentException e) {
+                    plugin.getLogger().warning("Tipo di entità vanilla non valido: " + spawner.getMobType());
+                    continue;
+                } catch (Exception e) {
+                    plugin.getLogger().warning("Errore nel spawn del mob vanilla " + spawner.getMobType() + ": " + e.getMessage());
+                    continue;
                 }
-            } catch (Exception e) {
-                plugin.getLogger().warning("Errore nel spawn del mob " + spawner.getMobType() + ": " + e.getMessage());
+            } else {
+                // Spawn di mob MythicMobs usando la nuova API
+                try {
+                    entity = MythicBukkit.inst().getMobManager()
+                            .spawnMob(spawner.getMobType(), BukkitAdapter.adapt(spawnLoc))
+                            .getEntity().getBukkitEntity();
+                    plugin.getLogger().info("Spawnato mob MythicMobs: " + spawner.getMobType() + " alla posizione " + spawnLoc);
+                } catch (Exception e) {
+                    plugin.getLogger().warning("Errore nel spawn del mob MythicMobs " + spawner.getMobType() + ": " + e.getMessage());
+                    continue;
+                }
+            }
+
+            if (entity != null) {
+                // Rimuovi l'AI per far rimanere il mob fermo
+                if (entity instanceof org.bukkit.entity.LivingEntity) {
+                    org.bukkit.entity.LivingEntity livingEntity = (org.bukkit.entity.LivingEntity) entity;
+                    livingEntity.setAI(false);
+                }
+
+                // Imposta per non despawnare
+                entity.setPersistent(true);
+
+                // Aggiungi alla lista dei mob attivi
+                activeMobs.add(entity);
             }
         }
     }
@@ -306,6 +350,7 @@ public class SpawnerManager {
         }
         activeMobs.clear();
     }
+
     public void reloadAllSpawners() {
         plugin.getLogger().info("Ricaricamento completo di tutti gli spawner...");
         spawners.clear();
@@ -314,7 +359,7 @@ public class SpawnerManager {
 
         // Debug: elenca tutti gli spawner caricati
         for (CustomSpawner spawner : spawners.values()) {
-            plugin.getLogger().info("Spawner in memoria: " + spawner.getName() + " nel mondo " +
+            plugin.getLogger().info("Spawner in memoria: " + spawner.getName() + " (" + spawner.getSpawnerType() + ") nel mondo " +
                     spawner.getLocation().getWorld().getName());
         }
     }

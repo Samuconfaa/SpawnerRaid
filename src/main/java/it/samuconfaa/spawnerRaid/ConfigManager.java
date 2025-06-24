@@ -42,6 +42,56 @@ public class ConfigManager {
             config.set("messages.no-spawners-found", "&eNessuno spawner trovato nel mondo '{world}'!");
         }
 
+        // Nuovi messaggi per i tipi di mob
+        if (!config.contains("messages.mob-not-exists")) {
+            config.set("messages.mob-not-exists", "&cIl mob '{mob}' non esiste!");
+        }
+
+        if (!config.contains("messages.vanilla-mob-not-exists")) {
+            config.set("messages.vanilla-mob-not-exists", "&cIl mob vanilla '{mob}' non esiste!");
+        }
+
+        if (!config.contains("messages.mythic-mob-not-exists")) {
+            config.set("messages.mythic-mob-not-exists", "&cIl mob MythicMobs '{mob}' non esiste!");
+        }
+
+        if (!config.contains("messages.spawner-already-exists")) {
+            config.set("messages.spawner-already-exists", "&cEsiste già uno spawner con il nome '{name}'!");
+        }
+
+        if (!config.contains("messages.world-not-found")) {
+            config.set("messages.world-not-found", "&cIl mondo '{world}' non esiste!");
+        }
+
+        if (!config.contains("messages.invalid-quantity")) {
+            config.set("messages.invalid-quantity", "&cLa quantità deve essere un numero maggiore di 0!");
+        }
+
+        if (!config.contains("messages.invalid-spawner-type")) {
+            config.set("messages.invalid-spawner-type", "&cTipo spawner non valido! Usa 'vanilla' o 'mythicmob'");
+        }
+
+        if (!config.contains("messages.only-players")) {
+            config.set("messages.only-players", "&cQuesto comando può essere eseguito solo da un giocatore!");
+        }
+
+        if (!config.contains("messages.permission-denied")) {
+            config.set("messages.permission-denied", "&cNon hai il permesso per utilizzare questo comando!");
+        }
+
+        // Impostazioni avanzate
+        if (!config.contains("settings.auto-save-interval")) {
+            config.set("settings.auto-save-interval", 300);
+        }
+
+        if (!config.contains("settings.max-spawners-per-world")) {
+            config.set("settings.max-spawners-per-world", 50);
+        }
+
+        if (!config.contains("settings.debug")) {
+            config.set("settings.debug", false);
+        }
+
         plugin.saveConfig();
     }
 
@@ -62,6 +112,18 @@ public class ConfigManager {
         return getMessage(key)
                 .replace("{" + placeholder1 + "}", value1)
                 .replace("{" + placeholder2 + "}", value2);
+    }
+
+    public int getAutoSaveInterval() {
+        return config.getInt("settings.auto-save-interval", 300);
+    }
+
+    public int getMaxSpawnersPerWorld() {
+        return config.getInt("settings.max-spawners-per-world", 50);
+    }
+
+    public boolean isDebugMode() {
+        return config.getBoolean("settings.debug", false);
     }
 
     public void reloadConfig() {
