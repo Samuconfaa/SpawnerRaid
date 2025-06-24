@@ -3,13 +3,13 @@ version: 1.0.0
 main: it.samuconfaa.spawnerRaid.SpawnerRaid
 api-version: 1.21
 author: SamuConfaa
-description: Plugin per gestire spawner di MythicMobs con sistema di raid
+description: Plugin per gestire spawner di MythicMobs e mob vanilla con sistema di raid
 depend: [MythicMobs]
 
 commands:
   setspawner:
     description: Crea un nuovo spawner
-    usage: /setspawner <nome> <mob_mythic> <quantità>
+    usage: /setspawner <vanilla|mythicmob> <nome> <mob> <quantità>
     permission: spawnerraid.setspawner
     permission-message: §cNon hai il permesso per utilizzare questo comando!
 

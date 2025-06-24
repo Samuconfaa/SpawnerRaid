@@ -9,11 +9,15 @@ messages:
   spawner-not-found: "&cSpawner '{name}' non trovato!"
   spawners-activated: "&aAttivati {count} spawner nel mondo '{world}'!"
   no-spawners-found: "&eNessuno spawner trovato nel mondo '{world}'!"
-  mob-not-exists: "&cIl mob MythicMobs '{mob}' non esiste!"
+  mob-not-exists: "&cIl mob '{mob}' non esiste!"
+  vanilla-mob-not-exists: "&cIl mob vanilla '{mob}' non esiste!"
+  mythic-mob-not-exists: "&cIl mob MythicMobs '{mob}' non esiste!"
   spawner-already-exists: "&cEsiste già uno spawner con il nome '{name}'!"
   world-not-found: "&cIl mondo '{world}' non esiste!"
   invalid-quantity: "&cLa quantità deve essere un numero maggiore di 0!"
+  invalid-spawner-type: "&cTipo spawner non valido! Usa 'vanilla' o 'mythicmob'"
   only-players: "&cQuesto comando può essere eseguito solo da un giocatore!"
+  permission-denied: "&cNon hai il permesso per utilizzare questo comando!"
 
 # Impostazioni avanzate
 settings:
