@@ -7,13 +7,16 @@ import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
+import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
 import org.bukkit.ChatColor;
 import it.samuconfaa.spawnerRaid.SpawnerRaid;
 import it.samuconfaa.spawnerRaid.CustomSpawner;
+import it.samuconfaa.spawnerRaid.CustomSpawner.SpawnerType;
 import io.lumine.mythic.bukkit.MythicBukkit;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -65,39 +68,79 @@ public class SpawnerCommands implements CommandExecutor, TabCompleter {
         List<String> completions = new ArrayList<>();
 
         if (args.length == 1) {
-            // Suggerimenti per nomi spawner (3 nomi casuali)
+            // Primo argomento: tipo di spawner
+            completions.add("vanilla");
+            completions.add("mythicmob");
+
+            return completions.stream()
+                    .filter(type -> type.toLowerCase().startsWith(args[0].toLowerCase()))
+                    .collect(Collectors.toList());
+
+        } else if (args.length == 2) {
+            // Secondo argomento: nome spawner
             completions.add("spawner_" + (System.currentTimeMillis() % 1000));
             completions.add("raid_spawner_" + (int)(Math.random() * 999 + 1));
             completions.add("mob_spawner_" + (int)(Math.random() * 999 + 1));
 
-            // Filtra in base a quello che ha già scritto l'utente
             return completions.stream()
-                    .filter(name -> name.toLowerCase().startsWith(args[0].toLowerCase()))
+                    .filter(name -> name.toLowerCase().startsWith(args[1].toLowerCase()))
                     .collect(Collectors.toList());
 
-        } else if (args.length == 2) {
-            // Suggerimenti per nomi mob MythicMobs
-            try {
-                completions = MythicBukkit.inst().getMobManager().getMobNames()
-                        .stream()
-                        .filter(name -> name.toLowerCase().startsWith(args[1].toLowerCase()))
-                        .collect(Collectors.toList());
-            } catch (Exception e) {
-                // Fallback se non riesce a ottenere i nomi dei mob
-                completions.add("SkeletonKing");
-                completions.add("ZombieMinion");
-                completions.add("CustomBoss");
-                completions.add("FireDragon");
-                completions.add("IceGolem");
+        } else if (args.length == 3) {
+            // Terzo argomento: nome mob (dipende dal tipo)
+            String spawnerType = args[0].toLowerCase();
+
+            if ("vanilla".equals(spawnerType)) {
+                // Suggerimenti per mob vanilla
+                completions = getVanillaMobSuggestions(args[2]);
+            } else if ("mythicmob".equals(spawnerType)) {
+                // Suggerimenti per mob MythicMobs
+                completions = getMythicMobSuggestions(args[2]);
             }
 
-        } else if (args.length == 3) {
-            // Suggerimenti per quantità (5 quantità random)
+        } else if (args.length == 4) {
+            // Quarto argomento: quantità
             completions.add("1");
             completions.add("5");
             completions.add("10");
             completions.add("25");
             completions.add("50");
+        }
+
+        return completions;
+    }
+
+    private List<String> getVanillaMobSuggestions(String input) {
+        List<String> vanillaMobs = Arrays.asList(
+                "ZOMBIE", "SKELETON", "CREEPER", "SPIDER", "ENDERMAN", "WITCH",
+                "ZOMBIE_VILLAGER", "HUSK", "STRAY", "WITHER_SKELETON", "BLAZE",
+                "GHAST", "MAGMA_CUBE", "SLIME", "SILVERFISH", "ENDERMITE",
+                "GUARDIAN", "ELDER_GUARDIAN", "SHULKER", "VEX", "VINDICATOR",
+                "EVOKER", "PILLAGER", "RAVAGER", "PHANTOM", "DROWNED",
+                "PIGLIN", "PIGLIN_BRUTE", "ZOMBIFIED_PIGLIN", "HOGLIN", "ZOGLIN",
+                "WARDEN", "ALLAY", "AXOLOTL", "GOAT", "GLOW_SQUID"
+        );
+
+        return vanillaMobs.stream()
+                .filter(mob -> mob.toLowerCase().startsWith(input.toLowerCase()))
+                .collect(Collectors.toList());
+    }
+
+    private List<String> getMythicMobSuggestions(String input) {
+        List<String> completions = new ArrayList<>();
+
+        try {
+            completions = MythicBukkit.inst().getMobManager().getMobNames()
+                    .stream()
+                    .filter(name -> name.toLowerCase().startsWith(input.toLowerCase()))
+                    .collect(Collectors.toList());
+        } catch (Exception e) {
+            // Fallback se non riesce a ottenere i nomi dei mob
+            completions.add("SkeletonKing");
+            completions.add("ZombieMinion");
+            completions.add("CustomBoss");
+            completions.add("FireDragon");
+            completions.add("IceGolem");
         }
 
         return completions;
@@ -143,7 +186,8 @@ public class SpawnerCommands implements CommandExecutor, TabCompleter {
         sender.sendMessage(ChatColor.GREEN + "Spawner in memoria: " + plugin.getSpawnerManager().getAllSpawners().size());
         for (CustomSpawner spawner : plugin.getSpawnerManager().getAllSpawners()) {
             sender.sendMessage(ChatColor.WHITE + "- " + spawner.getName() + " nel mondo " +
-                    spawner.getLocation().getWorld().getName() + " (" + spawner.getMobType() + " x" + spawner.getQuantity() + ")");
+                    spawner.getLocation().getWorld().getName() + " (" + spawner.getSpawnerType() +
+                    " - " + spawner.getMobType() + " x" + spawner.getQuantity() + ")");
         }
 
         // Forza ricaricamento e mostra risultato
@@ -161,18 +205,31 @@ public class SpawnerCommands implements CommandExecutor, TabCompleter {
             return true;
         }
 
-        if (args.length != 3) {
-            sender.sendMessage(ChatColor.RED + "Uso: /setspawner <nome> <mob_mythic> <quantità>");
+        if (args.length != 4) {
+            sender.sendMessage(ChatColor.RED + "Uso: /setspawner <vanilla|mythicmob> <nome> <mob> <quantità>");
             return true;
         }
 
         Player player = (Player) sender;
-        String name = args[0];
-        String mobType = args[1];
+        String spawnerTypeStr = args[0].toLowerCase();
+        String name = args[1];
+        String mobType = args[2];
         int quantity;
 
+        // Verifica tipo spawner
+        SpawnerType spawnerType;
+        if ("vanilla".equals(spawnerTypeStr)) {
+            spawnerType = SpawnerType.VANILLA;
+        } else if ("mythicmob".equals(spawnerTypeStr)) {
+            spawnerType = SpawnerType.MYTHICMOB;
+        } else {
+            sender.sendMessage(ChatColor.RED + "Tipo spawner non valido! Usa 'vanilla' o 'mythicmob'");
+            return true;
+        }
+
+        // Verifica quantità
         try {
-            quantity = Integer.parseInt(args[2]);
+            quantity = Integer.parseInt(args[3]);
             if (quantity <= 0) {
                 sender.sendMessage(ChatColor.RED + "La quantità deve essere maggiore di 0!");
                 return true;
@@ -182,10 +239,19 @@ public class SpawnerCommands implements CommandExecutor, TabCompleter {
             return true;
         }
 
-        // Verifica se il mob di MythicMobs esiste
-        if (!MythicBukkit.inst().getMobManager().getMythicMob(mobType).isPresent()) {
-            sender.sendMessage(ChatColor.RED + "Il mob MythicMobs '" + mobType + "' non esiste!");
-            return true;
+        // Verifica se il mob esiste
+        if (spawnerType == SpawnerType.VANILLA) {
+            try {
+                EntityType.valueOf(mobType.toUpperCase());
+            } catch (IllegalArgumentException e) {
+                sender.sendMessage(ChatColor.RED + "Il mob vanilla '" + mobType + "' non esiste!");
+                return true;
+            }
+        } else {
+            if (!MythicBukkit.inst().getMobManager().getMythicMob(mobType).isPresent()) {
+                sender.sendMessage(ChatColor.RED + "Il mob MythicMobs '" + mobType + "' non esiste!");
+                return true;
+            }
         }
 
         // Verifica se esiste già uno spawner con lo stesso nome
@@ -195,12 +261,12 @@ public class SpawnerCommands implements CommandExecutor, TabCompleter {
         }
 
         Location location = player.getLocation();
-        CustomSpawner spawner = new CustomSpawner(name, location, mobType, quantity);
+        CustomSpawner spawner = new CustomSpawner(name, location, mobType, quantity, spawnerType);
 
         plugin.getSpawnerManager().addSpawner(spawner);
         plugin.getSpawnerManager().saveSpawners();
 
-        sender.sendMessage(ChatColor.GREEN + "Spawner '" + name + "' creato con successo!");
+        sender.sendMessage(ChatColor.GREEN + "Spawner '" + name + "' (" + spawnerType + ") creato con successo!");
         sender.sendMessage(ChatColor.YELLOW + "Posizione: " + location.getWorld().getName() +
                 " X:" + location.getBlockX() + " Y:" + location.getBlockY() + " Z:" + location.getBlockZ());
 

@@ -8,12 +8,24 @@ public class CustomSpawner {
     private final Location location;
     private final String mobType;
     private final int quantity;
+    private final SpawnerType spawnerType; // Nuovo campo per il tipo di spawner
 
-    public CustomSpawner(String name, Location location, String mobType, int quantity) {
+    public enum SpawnerType {
+        VANILLA,
+        MYTHICMOB
+    }
+
+    public CustomSpawner(String name, Location location, String mobType, int quantity, SpawnerType spawnerType) {
         this.name = name;
         this.location = location;
         this.mobType = mobType;
         this.quantity = quantity;
+        this.spawnerType = spawnerType;
+    }
+
+    // Costruttore per compatibilità con versioni precedenti (default a MYTHICMOB)
+    public CustomSpawner(String name, Location location, String mobType, int quantity) {
+        this(name, location, mobType, quantity, SpawnerType.MYTHICMOB);
     }
 
     public String getName() {
@@ -32,6 +44,10 @@ public class CustomSpawner {
         return quantity;
     }
 
+    public SpawnerType getSpawnerType() {
+        return spawnerType;
+    }
+
     @Override
     public String toString() {
         return "CustomSpawner{" +
@@ -39,6 +55,7 @@ public class CustomSpawner {
                 ", location=" + location +
                 ", mobType='" + mobType + '\'' +
                 ", quantity=" + quantity +
+                ", spawnerType=" + spawnerType +
                 '}';
     }
 
