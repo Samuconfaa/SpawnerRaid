@@ -36,6 +36,9 @@ public class SpawnerRaid extends JavaPlugin {
         getCommand("eliminaspawner").setExecutor(commandExecutor);
         getCommand("eliminaspawner").setTabCompleter(commandExecutor);
 
+        getCommand("renamespawner").setExecutor(commandExecutor);
+        getCommand("renamespawner").setTabCompleter(commandExecutor);
+
         getCommand("debugspawners").setExecutor(commandExecutor);
         getCommand("debugspawners").setTabCompleter(commandExecutor);
 

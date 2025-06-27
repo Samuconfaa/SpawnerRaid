@@ -44,6 +44,8 @@ public class SpawnerCommands implements CommandExecutor, TabCompleter {
                 return handleDebugSpawners(sender, args);
             case "spawnerdebug":
                 return handleSpawnerDebug(sender, args);
+            case "renamespawner":
+                return handleRenameSpawner(sender, args);
             default:
                 return false;
         }
@@ -61,6 +63,8 @@ public class SpawnerCommands implements CommandExecutor, TabCompleter {
                 return getAttivaSpawnerCompletions(args);
             case "eliminaspawner":
                 return getEliminaSpawnerCompletions(args);
+            case "renamespawner":
+                return getRenameSpawnerCompletions(args);
             case "debugspawners":
             case "spawnerdebug":
                 // Nessun argomento per debug
@@ -68,6 +72,81 @@ public class SpawnerCommands implements CommandExecutor, TabCompleter {
             default:
                 return completions;
         }
+    }
+
+    private boolean handleRenameSpawner(CommandSender sender, String[] args) {
+        if (!sender.hasPermission("spawnerraid.rename")) {
+            sender.sendMessage(ChatColor.RED + "Non hai il permesso per utilizzare questo comando!");
+            return true;
+        }
+
+        if (args.length != 2) {
+            sender.sendMessage(ChatColor.RED + "Uso: /renamespawner <vecchio_nome> <nuovo_nome>");
+            return true;
+        }
+
+        String oldName = args[0];
+        String newName = args[1];
+
+        // Verifica se il vecchio spawner esiste
+        CustomSpawner spawner = plugin.getSpawnerManager().getSpawner(oldName);
+        if (spawner == null) {
+            sender.sendMessage(ChatColor.RED + "Spawner '" + oldName + "' non trovato!");
+            return true;
+        }
+
+        // Verifica se il nuovo nome è già in uso
+        if (plugin.getSpawnerManager().getSpawner(newName) != null) {
+            sender.sendMessage(ChatColor.RED + "Esiste già uno spawner con il nome '" + newName + "'!");
+            return true;
+        }
+
+        // Verifica che il nuovo nome non sia vuoto o contenga caratteri speciali
+        if (newName.trim().isEmpty()) {
+            sender.sendMessage(ChatColor.RED + "Il nuovo nome non può essere vuoto!");
+            return true;
+        }
+
+        if (!newName.matches("^[a-zA-Z0-9_-]+$")) {
+            sender.sendMessage(ChatColor.RED + "Il nuovo nome può contenere solo lettere, numeri, underscore e trattini!");
+            return true;
+        }
+
+        // Esegui il rename
+        boolean success = plugin.getSpawnerManager().renameSpawner(oldName, newName);
+
+        if (success) {
+            plugin.getSpawnerManager().saveSpawners();
+            sender.sendMessage(ChatColor.GREEN + "Spawner rinominato con successo!");
+            sender.sendMessage(ChatColor.YELLOW + "'" + oldName + "' → '" + newName + "'");
+        } else {
+            sender.sendMessage(ChatColor.RED + "Errore durante il rename dello spawner!");
+        }
+
+        return true;
+    }
+
+    private List<String> getRenameSpawnerCompletions(String[] args) {
+        List<String> completions = new ArrayList<>();
+
+        if (args.length == 1) {
+            // Primo argomento: vecchio nome spawner (tab completer con spawner esistenti)
+            completions = plugin.getSpawnerManager().getAllSpawners().stream()
+                    .map(CustomSpawner::getName)
+                    .filter(spawnerName -> spawnerName.toLowerCase().startsWith(args[0].toLowerCase()))
+                    .collect(Collectors.toList());
+        } else if (args.length == 2) {
+            // Secondo argomento: nuovo nome (suggerimenti)
+            String oldName = args[0];
+            completions.add(oldName + "_cc1");
+
+            // Filtra i suggerimenti in base all'input
+            completions = completions.stream()
+                    .filter(name -> name.toLowerCase().startsWith(args[1].toLowerCase()))
+                    .collect(Collectors.toList());
+        }
+
+        return completions;
     }
 
     private boolean handleStopSpawner(CommandSender sender, String[] args) {

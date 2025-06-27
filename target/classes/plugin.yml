@@ -25,6 +25,12 @@ commands:
     permission: spawnerraid.remove
     permission-message: §cNon hai il permesso per utilizzare questo comando!
 
+  renamespawner:
+    description: Rinomina uno spawner esistente
+    usage: /renamespawner <vecchio_nome> <nuovo_nome>
+    permission: spawnerraid.rename
+    permission-message: §cNon hai il permesso per utilizzare questo comando!
+
   debugspawners:
     description: Debug degli spawner
     usage: /debugspawners
@@ -47,6 +53,7 @@ permissions:
       spawnerraid.setspawner: true
       spawnerraid.activate: true
       spawnerraid.remove: true
+      spawnerraid.rename: true
       spawnerraid.debug: true
     default: op
 
@@ -60,6 +67,10 @@ permissions:
 
   spawnerraid.remove:
     description: Permesso per eliminare spawner
+    default: op
+
+  spawnerraid.rename:
+    description: Permesso per rinominare spawner
     default: op
 
   spawnerraid.debug:

@@ -4,7 +4,7 @@ import org.bukkit.Location;
 
 public class CustomSpawner {
 
-    private final String name;
+    private String name;
     private final Location location;
     private final String mobType;
     private final int quantity;
@@ -85,6 +85,14 @@ public class CustomSpawner {
                 ", spawnerType=" + spawnerType +
                 ", state=" + state +
                 '}';
+    }
+
+    /**
+     * Imposta il nome dello spawner
+     * @param name Il nuovo nome dello spawner
+     */
+    public void setName(String name) {
+        this.name = name;
     }
 
     @Override

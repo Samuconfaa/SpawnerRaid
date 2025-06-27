@@ -625,6 +625,71 @@ public class SpawnerManager {
 
     // Metodi di gestione file e spawner (mantenuti dal codice originale ma aggiornati)
 
+
+    /**
+     * Rinomina uno spawner esistente
+     * @param oldName Il vecchio nome dello spawner
+     * @param newName Il nuovo nome dello spawner
+     * @return true se il rename è andato a buon fine, false altrimenti
+     */
+    public boolean renameSpawner(String oldName, String newName) {
+        // Verifica che il vecchio spawner esista
+        CustomSpawner spawner = spawners.get(oldName);
+        if (spawner == null) {
+            plugin.getLogger().warning("Tentativo di rinominare uno spawner inesistente: " + oldName);
+            return false;
+        }
+
+        // Verifica che il nuovo nome non sia già in uso
+        if (spawners.containsKey(newName)) {
+            plugin.getLogger().warning("Tentativo di rinominare con un nome già esistente: " + newName);
+            return false;
+        }
+
+        try {
+            // Rimuovi il vecchio riferimento
+            spawners.remove(oldName);
+
+            // Aggiorna il nome dello spawner
+            spawner.setName(newName);
+
+            // Aggiungi con il nuovo nome
+            spawners.put(newName, spawner);
+
+            // Gestisci gli ologrammi di debug se attivi
+            if (!debugPlayers.isEmpty()) {
+                // Rimuovi il vecchio ologramma
+                String oldHologramId = "spawner_debug_" + oldName;
+                if (debugHolograms.containsKey(oldHologramId)) {
+                    try {
+                        DHAPI.removeHologram(oldHologramId);
+                        debugHolograms.remove(oldHologramId);
+                    } catch (Exception e) {
+                        plugin.getLogger().warning("Errore rimozione ologramma durante rename: " + e.getMessage());
+                    }
+                }
+
+                // Crea il nuovo ologramma
+                createHologramForSpawner(spawner);
+            }
+
+            plugin.getLogger().info("Spawner rinominato con successo: " + oldName + " → " + newName);
+            return true;
+
+        } catch (Exception e) {
+            plugin.getLogger().severe("Errore durante il rename dello spawner " + oldName + ": " + e.getMessage());
+
+            // Ripristina lo stato precedente in caso di errore
+            if (!spawners.containsKey(oldName) && spawner != null) {
+                spawner.setName(oldName); // Ripristina il nome originale
+                spawners.put(oldName, spawner);
+                spawners.remove(newName); // Rimuovi il nuovo se era stato aggiunto
+            }
+
+            return false;
+        }
+    }
+
     public void addSpawner(CustomSpawner spawner) {
         spawners.put(spawner.getName(), spawner);
 
