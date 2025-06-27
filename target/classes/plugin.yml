@@ -4,7 +4,7 @@ main: it.samuconfaa.spawnerRaid.SpawnerRaid
 api-version: 1.21
 author: SamuConfaa
 description: Plugin per gestire spawner di MythicMobs e mob vanilla con sistema di raid
-depend: [MythicMobs]
+depend: [MythicMobs, DecentHolograms]
 
 commands:
   setspawner:

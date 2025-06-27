@@ -65,6 +65,9 @@ public class SpawnerManager {
         if (debugPlayers.contains(player)) {
             debugPlayers.remove(player);
 
+            // Rimuovi il giocatore dalla visibilità degli ologrammi
+            updateHologramVisibility(player, false);
+
             // Se nessun giocatore ha più il debug attivo, rimuovi tutti gli ologrammi
             if (debugPlayers.isEmpty()) {
                 removeAllDebugHolograms();
@@ -77,6 +80,9 @@ public class SpawnerManager {
             // Se è il primo giocatore ad attivare il debug, crea gli ologrammi
             if (debugPlayers.size() == 1) {
                 createDebugHolograms();
+            } else {
+                // Se gli ologrammi esistono già, mostrali a questo giocatore
+                updateHologramVisibility(player, true);
             }
 
             return true;
@@ -124,11 +130,12 @@ public class SpawnerManager {
         try {
             Hologram hologram = DHAPI.createHologram(hologramId, hologramLocation, lines);
 
-            // Imposta l'ologramma come visibile solo ai giocatori in debug
-            for (Player player : Bukkit.getOnlinePlayers()) {
-                if (!debugPlayers.contains(player)) {
-                    hologram.hidePlayer(player);
-                }
+            // Imposta l'ologramma come nascosto di default
+            hologram.setDefaultVisibleState(false);
+
+            // Mostra l'ologramma solo ai giocatori in debug
+            for (Player debugPlayer : debugPlayers) {
+                hologram.setShowPlayer(debugPlayer);
             }
 
             debugHolograms.put(hologramId, hologram);
@@ -160,9 +167,9 @@ public class SpawnerManager {
         for (Hologram hologram : debugHolograms.values()) {
             try {
                 if (show) {
-                    hologram.showPlayer(player);
+                    hologram.setShowPlayer(player);
                 } else {
-                    hologram.hidePlayer(player);
+                    hologram.removeShowPlayer(player);
                 }
             } catch (Exception e) {
                 plugin.getLogger().warning("Errore nell'aggiornamento visibilità ologramma per " + player.getName() + ": " + e.getMessage());
@@ -259,9 +266,11 @@ public class SpawnerManager {
      * Gestisce l'entrata di un giocatore nel server
      */
     public void onPlayerJoin(Player player) {
-        // Se ci sono giocatori in debug, nascondi gli ologrammi al nuovo giocatore
-        if (!debugPlayers.isEmpty() && !debugPlayers.contains(player)) {
-            updateHologramVisibility(player, false);
+        // Gli ologrammi sono già impostati come nascosti di default,
+        // quindi non è necessario fare nulla per i nuovi giocatori
+        // a meno che non siano già nella lista debug
+        if (debugPlayers.contains(player)) {
+            updateHologramVisibility(player, true);
         }
     }
 
