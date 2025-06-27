@@ -1,6 +1,7 @@
 # Configurazione SpawnerRaid Plugin
 # Distanza in blocchi entro cui i mob si attivano quando un giocatore si avvicina
 activation-distance: 10.0
+spawn-distance: 50
 
 # Messaggi del plugin
 messages:

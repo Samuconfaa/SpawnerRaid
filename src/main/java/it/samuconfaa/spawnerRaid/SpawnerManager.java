@@ -418,6 +418,8 @@ public class SpawnerManager {
         debugTask.runTaskTimer(plugin, 0L, 20L);
     }
 
+    // Sostituisci il metodo showDebugParticles nella classe SpawnerManager con questo:
+
     /**
      * Mostra le particelle di debug per uno spawner
      */
@@ -430,11 +432,6 @@ public class SpawnerManager {
 
         // Particelle diverse in base al tipo e stato
         Particle particle;
-        if (spawner.getSpawnerType() == SpawnerType.VANILLA) {
-            particle = Particle.FLAME;
-        } else {
-            particle = Particle.DRAGON_BREATH;
-        }
 
         // Colore diverso in base allo stato
         switch (spawner.getState()) {
@@ -442,29 +439,89 @@ public class SpawnerManager {
                 particle = Particle.SMOKE;
                 break;
             case WAITING:
-                particle = Particle.FALLING_HONEY;
+                particle = Particle.HAPPY_VILLAGER;
                 break;
             case SPAWNED:
                 particle = Particle.HEART;
                 break;
             case STOPPED:
-                particle = Particle.SHRIEK;
+                particle = Particle.CLOUD;
+                break;
+            default:
+                particle = Particle.FLAME;
                 break;
         }
 
-        // Cerchio di particelle
-        for (int i = 0; i < 8; i++) {
-            double angle = 2 * Math.PI * i / 8;
-            double x = loc.getX() + Math.cos(angle) * 1.5;
-            double z = loc.getZ() + Math.sin(angle) * 1.5;
-            double y = loc.getY() + 1;
-
-            Location particleLoc = new Location(loc.getWorld(), x, y, z);
-            player.spawnParticle(particle, particleLoc, 1, 0, 0, 0, 0);
+        // Se è un MythicMob, usa particelle diverse
+        if (spawner.getSpawnerType() == SpawnerType.MYTHICMOB) {
+            switch (spawner.getState()) {
+                case INACTIVE:
+                    particle = Particle.ASH;
+                    break;
+                case WAITING:
+                    particle = Particle.END_ROD;
+                    break;
+                case SPAWNED:
+                    particle = Particle.SOUL_FIRE_FLAME;
+                    break;
+                case STOPPED:
+                    particle = Particle.SMOKE;
+                    break;
+                default:
+                    particle = Particle.SOUL_FIRE_FLAME;
+                    break;
+            }
         }
 
-        // Particella centrale
-        player.spawnParticle(particle, loc.clone().add(0, 1, 0), 3, 0.2, 0.2, 0.2, 0);
+        try {
+            // Cerchio di particelle
+            for (int i = 0; i < 8; i++) {
+                double angle = 2 * Math.PI * i / 8;
+                double x = loc.getX() + Math.cos(angle) * 1.5;
+                double z = loc.getZ() + Math.sin(angle) * 1.5;
+                double y = loc.getY() + 1;
+
+                Location particleLoc = new Location(loc.getWorld(), x, y, z);
+
+                // Spawn particelle con gestione degli errori
+                try {
+                    player.spawnParticle(particle, particleLoc, 1, 0, 0, 0, 0);
+                } catch (Exception e) {
+                    // Se fallisce, usa una particella semplice
+                    player.spawnParticle(Particle.FLAME, particleLoc, 1, 0, 0, 0, 0);
+                }
+            }
+
+            // Particella centrale
+            try {
+                player.spawnParticle(particle, loc.clone().add(0, 1, 0), 3, 0.2, 0.2, 0.2, 0);
+            } catch (Exception e) {
+                // Se fallisce, usa una particella semplice
+                player.spawnParticle(Particle.FLAME, loc.clone().add(0, 1, 0), 3, 0.2, 0.2, 0.2, 0);
+            }
+
+        } catch (Exception e) {
+            // Log dell'errore e fallback
+            plugin.getLogger().warning("Errore nell'visualizzazione delle particelle per lo spawner " +
+                    spawner.getName() + ": " + e.getMessage());
+
+            // Usa solo particelle semplici come fallback
+            try {
+                for (int i = 0; i < 8; i++) {
+                    double angle = 2 * Math.PI * i / 8;
+                    double x = loc.getX() + Math.cos(angle) * 1.5;
+                    double z = loc.getZ() + Math.sin(angle) * 1.5;
+                    double y = loc.getY() + 1;
+
+                    Location particleLoc = new Location(loc.getWorld(), x, y, z);
+                    player.spawnParticle(Particle.FLAME, particleLoc, 1);
+                }
+                player.spawnParticle(Particle.FLAME, loc.clone().add(0, 1, 0), 3);
+            } catch (Exception ex) {
+                // Se anche questo fallisce, disabilita le particelle per questo spawner
+                plugin.getLogger().severe("Impossibile visualizzare particelle per lo spawner " + spawner.getName());
+            }
+        }
     }
 
     /**
