@@ -3,12 +3,14 @@ package it.samuconfaa.spawnerRaid;
 import io.lumine.mythic.bukkit.BukkitAdapter;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.Particle;
 import org.bukkit.World;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
+import org.bukkit.scheduler.BukkitRunnable;
 import io.lumine.mythic.bukkit.MythicBukkit;
 import it.samuconfaa.spawnerRaid.SpawnerRaid;
 import it.samuconfaa.spawnerRaid.CustomSpawner;
@@ -23,6 +25,8 @@ public class SpawnerManager {
     private final SpawnerRaid plugin;
     private final Map<String, CustomSpawner> spawners;
     private final Set<Entity> activeMobs;
+    private final Set<Player> debugPlayers; // Giocatori che hanno il debug attivo
+    private BukkitRunnable debugTask; // Task per mostrare le particelle
     private File spawnersFile;
     private YamlConfiguration spawnersConfig;
 
@@ -30,6 +34,7 @@ public class SpawnerManager {
         this.plugin = plugin;
         this.spawners = new HashMap<>();
         this.activeMobs = new HashSet<>();
+        this.debugPlayers = new HashSet<>();
 
         // Crea il file spawners.yml
         spawnersFile = new File(plugin.getDataFolder(), "spawners.yml");
@@ -42,6 +47,101 @@ public class SpawnerManager {
             }
         }
         spawnersConfig = YamlConfiguration.loadConfiguration(spawnersFile);
+
+        // Inizializza il task per il debug visivo
+        startDebugTask();
+    }
+
+    /**
+     * Attiva/disattiva il debug visivo per un giocatore
+     * @param player Il giocatore
+     * @return true se il debug è ora attivo, false se è disattivato
+     */
+    public boolean toggleDebugMode(Player player) {
+        if (debugPlayers.contains(player)) {
+            debugPlayers.remove(player);
+            return false;
+        } else {
+            debugPlayers.add(player);
+            return true;
+        }
+    }
+
+    /**
+     * Avvia il task per mostrare le particelle di debug
+     */
+    private void startDebugTask() {
+        debugTask = new BukkitRunnable() {
+            @Override
+            public void run() {
+                if (debugPlayers.isEmpty()) {
+                    return; // Non fare nulla se nessuno ha il debug attivo
+                }
+
+                for (Player player : new HashSet<>(debugPlayers)) {
+                    if (!player.isOnline()) {
+                        debugPlayers.remove(player);
+                        continue;
+                    }
+
+                    // Mostra particelle solo per gli spawner nel mondo del giocatore
+                    for (CustomSpawner spawner : spawners.values()) {
+                        if (spawner.getLocation().getWorld().getName().equals(player.getWorld().getName())) {
+                            showDebugParticles(player, spawner);
+                        }
+                    }
+                }
+            }
+        };
+
+        // Esegui ogni 20 tick (1 secondo)
+        debugTask.runTaskTimer(plugin, 0L, 20L);
+    }
+
+    /**
+     * Mostra le particelle di debug per uno spawner
+     */
+    private void showDebugParticles(Player player, CustomSpawner spawner) {
+        Location loc = spawner.getLocation();
+
+        // Verifica che il giocatore sia abbastanza vicino per vedere le particelle (max 50 blocchi)
+        if (player.getLocation().distance(loc) > 50) {
+            return;
+        }
+
+        // Particelle diverse in base al tipo di spawner
+        Particle particle;
+        if (spawner.getSpawnerType() == SpawnerType.VANILLA) {
+            particle = Particle.FLAME; // Fiamme rosse per mob vanilla
+        } else {
+            particle = Particle.DRAGON_BREATH; // Particelle viola per MythicMobs
+        }
+
+        // Crea un cerchio di particelle attorno alla posizione dello spawner
+        for (int i = 0; i < 8; i++) {
+            double angle = 2 * Math.PI * i / 8;
+            double x = loc.getX() + Math.cos(angle) * 1.5;
+            double z = loc.getZ() + Math.sin(angle) * 1.5;
+            double y = loc.getY() + 1;
+
+            Location particleLoc = new Location(loc.getWorld(), x, y, z);
+            player.spawnParticle(particle, particleLoc, 1, 0, 0, 0, 0);
+        }
+
+        // Particella centrale più grande
+        player.spawnParticle(particle, loc.clone().add(0, 1, 0), 3, 0.2, 0.2, 0.2, 0);
+
+        // Particelle che salgono verso l'alto
+        player.spawnParticle(Particle.END_ROD, loc.clone().add(0, 1, 0), 2, 0.1, 0.5, 0.1, 0.02);
+    }
+
+    /**
+     * Ferma il task di debug quando il plugin si disabilita
+     */
+    public void stopDebugTask() {
+        if (debugTask != null && !debugTask.isCancelled()) {
+            debugTask.cancel();
+        }
     }
 
     public void addSpawner(CustomSpawner spawner) {

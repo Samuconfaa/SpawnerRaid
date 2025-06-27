@@ -36,6 +36,10 @@ public class SpawnerRaid extends JavaPlugin {
         getCommand("debugspawners").setExecutor(commandExecutor);
         getCommand("debugspawners").setTabCompleter(commandExecutor);
 
+        // Nuovo comando per il debug visivo
+        getCommand("spawnerdebug").setExecutor(commandExecutor);
+        getCommand("spawnerdebug").setTabCompleter(commandExecutor);
+
         // Registra i listener
         getServer().getPluginManager().registerEvents(new PlayerMoveListener(this), this);
 
@@ -51,6 +55,7 @@ public class SpawnerRaid extends JavaPlugin {
         if (spawnerManager != null) {
             spawnerManager.saveSpawners();
             spawnerManager.clearActiveMobs();
+            spawnerManager.stopDebugTask(); // Ferma il task di debug
         }
         getLogger().info("SpawnerRaid plugin disabilitato!");
     }

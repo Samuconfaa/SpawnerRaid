@@ -30,6 +30,12 @@ commands:
     usage: /debugspawners
     permission: spawnerraid.debug
 
+  spawnerdebug:
+    description: Attiva/disattiva la visualizzazione degli spawner
+    usage: /spawnerdebug
+    permission: spawnerraid.debug
+    permission-message: §cNon hai il permesso per utilizzare questo comando!
+
 permissions:
   spawnerraid.*:
     description: Accesso completo a tutti i comandi di SpawnerRaid
@@ -37,6 +43,7 @@ permissions:
       spawnerraid.setspawner: true
       spawnerraid.activate: true
       spawnerraid.remove: true
+      spawnerraid.debug: true
     default: op
 
   spawnerraid.setspawner:
