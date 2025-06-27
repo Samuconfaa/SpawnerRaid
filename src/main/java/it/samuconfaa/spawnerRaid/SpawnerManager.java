@@ -1,5 +1,7 @@
 package it.samuconfaa.spawnerRaid;
 
+import eu.decentsoftware.holograms.api.DHAPI;
+import eu.decentsoftware.holograms.api.holograms.Hologram;
 import io.lumine.mythic.bukkit.BukkitAdapter;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
@@ -26,6 +28,7 @@ public class SpawnerManager {
     private final Map<String, CustomSpawner> spawners;
     private final Set<Entity> activeMobs;
     private final Set<Player> debugPlayers; // Giocatori che hanno il debug attivo
+    private final Map<String, Hologram> debugHolograms; // Mappa per gestire gli ologrammi di debug
     private BukkitRunnable debugTask; // Task per mostrare le particelle
     private File spawnersFile;
     private YamlConfiguration spawnersConfig;
@@ -35,6 +38,7 @@ public class SpawnerManager {
         this.spawners = new HashMap<>();
         this.activeMobs = new HashSet<>();
         this.debugPlayers = new HashSet<>();
+        this.debugHolograms = new HashMap<>();
 
         // Crea il file spawners.yml
         spawnersFile = new File(plugin.getDataFolder(), "spawners.yml");
@@ -60,10 +64,109 @@ public class SpawnerManager {
     public boolean toggleDebugMode(Player player) {
         if (debugPlayers.contains(player)) {
             debugPlayers.remove(player);
+
+            // Se nessun giocatore ha più il debug attivo, rimuovi tutti gli ologrammi
+            if (debugPlayers.isEmpty()) {
+                removeAllDebugHolograms();
+            }
+
             return false;
         } else {
             debugPlayers.add(player);
+
+            // Se è il primo giocatore ad attivare il debug, crea gli ologrammi
+            if (debugPlayers.size() == 1) {
+                createDebugHolograms();
+            }
+
             return true;
+        }
+    }
+
+    /**
+     * Crea gli ologrammi di debug per tutti gli spawner
+     */
+    private void createDebugHolograms() {
+        for (CustomSpawner spawner : spawners.values()) {
+            createHologramForSpawner(spawner);
+        }
+    }
+
+    /**
+     * Crea un ologramma per uno spawner specifico
+     */
+    private void createHologramForSpawner(CustomSpawner spawner) {
+        String hologramId = "spawner_debug_" + spawner.getName();
+
+        // Rimuovi l'ologramma esistente se presente
+        if (debugHolograms.containsKey(hologramId)) {
+            DHAPI.removeHologram(hologramId);
+            debugHolograms.remove(hologramId);
+        }
+
+        // Crea la location 2 blocchi sopra lo spawner
+        Location hologramLocation = spawner.getLocation().clone().add(0, 2, 0);
+
+        // Crea le linee dell'ologramma
+        List<String> lines = new ArrayList<>();
+        lines.add("&e&l[" + spawner.getName() + "]");
+
+        // Seconda riga con informazioni sul mob
+        String mobInfo;
+        if (spawner.getSpawnerType() == SpawnerType.VANILLA) {
+            mobInfo = "&a" + spawner.getMobType() + " &7x&b" + spawner.getQuantity();
+        } else {
+            mobInfo = "&d" + spawner.getMobType() + " &7x&b" + spawner.getQuantity();
+        }
+        lines.add(mobInfo);
+
+        // Crea l'ologramma
+        try {
+            Hologram hologram = DHAPI.createHologram(hologramId, hologramLocation, lines);
+
+            // Imposta l'ologramma come visibile solo ai giocatori in debug
+            for (Player player : Bukkit.getOnlinePlayers()) {
+                if (!debugPlayers.contains(player)) {
+                    hologram.hidePlayer(player);
+                }
+            }
+
+            debugHolograms.put(hologramId, hologram);
+            plugin.getLogger().info("Creato ologramma debug per spawner: " + spawner.getName());
+        } catch (Exception e) {
+            plugin.getLogger().warning("Errore nella creazione dell'ologramma per spawner " + spawner.getName() + ": " + e.getMessage());
+        }
+    }
+
+    /**
+     * Rimuove tutti gli ologrammi di debug
+     */
+    private void removeAllDebugHolograms() {
+        for (String hologramId : new HashSet<>(debugHolograms.keySet())) {
+            try {
+                DHAPI.removeHologram(hologramId);
+                debugHolograms.remove(hologramId);
+                plugin.getLogger().info("Rimosso ologramma debug: " + hologramId);
+            } catch (Exception e) {
+                plugin.getLogger().warning("Errore nella rimozione dell'ologramma " + hologramId + ": " + e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * Aggiorna la visibilità degli ologrammi per un giocatore
+     */
+    private void updateHologramVisibility(Player player, boolean show) {
+        for (Hologram hologram : debugHolograms.values()) {
+            try {
+                if (show) {
+                    hologram.showPlayer(player);
+                } else {
+                    hologram.hidePlayer(player);
+                }
+            } catch (Exception e) {
+                plugin.getLogger().warning("Errore nell'aggiornamento visibilità ologramma per " + player.getName() + ": " + e.getMessage());
+            }
         }
     }
 
@@ -81,6 +184,11 @@ public class SpawnerManager {
                 for (Player player : new HashSet<>(debugPlayers)) {
                     if (!player.isOnline()) {
                         debugPlayers.remove(player);
+
+                        // Se era l'ultimo giocatore, rimuovi gli ologrammi
+                        if (debugPlayers.isEmpty()) {
+                            removeAllDebugHolograms();
+                        }
                         continue;
                     }
 
@@ -142,10 +250,28 @@ public class SpawnerManager {
         if (debugTask != null && !debugTask.isCancelled()) {
             debugTask.cancel();
         }
+
+        // Rimuovi tutti gli ologrammi
+        removeAllDebugHolograms();
+    }
+
+    /**
+     * Gestisce l'entrata di un giocatore nel server
+     */
+    public void onPlayerJoin(Player player) {
+        // Se ci sono giocatori in debug, nascondi gli ologrammi al nuovo giocatore
+        if (!debugPlayers.isEmpty() && !debugPlayers.contains(player)) {
+            updateHologramVisibility(player, false);
+        }
     }
 
     public void addSpawner(CustomSpawner spawner) {
         spawners.put(spawner.getName(), spawner);
+
+        // Se ci sono giocatori in debug, crea l'ologramma per il nuovo spawner
+        if (!debugPlayers.isEmpty()) {
+            createHologramForSpawner(spawner);
+        }
     }
 
     public CustomSpawner getSpawner(String name) {
@@ -153,7 +279,19 @@ public class SpawnerManager {
     }
 
     public boolean removeSpawner(String name) {
-        return spawners.remove(name) != null;
+        CustomSpawner removed = spawners.remove(name);
+
+        if (removed != null) {
+            // Rimuovi l'ologramma associato se esiste
+            String hologramId = "spawner_debug_" + name;
+            if (debugHolograms.containsKey(hologramId)) {
+                DHAPI.removeHologram(hologramId);
+                debugHolograms.remove(hologramId);
+            }
+            return true;
+        }
+
+        return false;
     }
 
     public void saveSpawners() {
@@ -220,6 +358,12 @@ public class SpawnerManager {
         }
 
         plugin.getLogger().info("Caricati " + spawners.size() + " spawner dal file.");
+
+        // Se ci sono giocatori in debug, ricrea gli ologrammi
+        if (!debugPlayers.isEmpty()) {
+            removeAllDebugHolograms();
+            createDebugHolograms();
+        }
     }
 
     public int activateSpawnersInWorld(World world) {
@@ -353,6 +497,12 @@ public class SpawnerManager {
                 CustomSpawner spawner = new CustomSpawner(name, location, mobType, quantity, spawnerType);
 
                 spawners.put(name, spawner);
+
+                // Se ci sono giocatori in debug, crea l'ologramma
+                if (!debugPlayers.isEmpty()) {
+                    createHologramForSpawner(spawner);
+                }
+
                 loadedCount++;
                 plugin.getLogger().info("Spawner '" + name + "' caricato con successo per il mondo '" + worldName + "'");
             } catch (Exception e) {
