@@ -243,6 +243,12 @@ public class SpawnerManager {
                 // Configura il mob
                 entity.setPersistent(true);
 
+                // ✅ AGGIUNTO: Disabilita l'AI inizialmente (mob freezato)
+                if (entity instanceof org.bukkit.entity.LivingEntity) {
+                    org.bukkit.entity.LivingEntity livingEntity = (org.bukkit.entity.LivingEntity) entity;
+                    livingEntity.setAI(false); // Mob freezato fino all'attivazione
+                }
+
                 // Aggiungi ai set
                 activeMobs.add(entity);
                 worldMobSet.add(entity);
