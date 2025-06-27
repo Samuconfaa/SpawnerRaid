@@ -176,7 +176,7 @@ public class SpawnerManager {
 
                 double distance = playerLocation.distance(spawner.getLocation());
 
-                if (distance <= 20.0) { // 20 blocchi di distanza
+                if (distance <= plugin.getConfigManager().getSpawnDistance()) { // 20 blocchi di distanza
                     plugin.getLogger().info("Giocatore " + player.getName() + " è vicino allo spawner " +
                             spawner.getName() + " (distanza: " + String.format("%.2f", distance) + ")");
 
@@ -439,16 +439,16 @@ public class SpawnerManager {
         // Colore diverso in base allo stato
         switch (spawner.getState()) {
             case INACTIVE:
-                particle = Particle.SMOKE_NORMAL;
+                particle = Particle.SMOKE;
                 break;
             case WAITING:
-                particle = Particle.VILLAGER_HAPPY;
+                particle = Particle.FALLING_HONEY;
                 break;
             case SPAWNED:
                 particle = Particle.HEART;
                 break;
             case STOPPED:
-                particle = Particle.BARRIER;
+                particle = Particle.SHRIEK;
                 break;
         }
 
@@ -720,4 +720,34 @@ public class SpawnerManager {
             debugTask.cancel();
         }
 
-        if (spawnerCheckTask != null && !spawnerCheckTask.i
+        if (spawnerCheckTask != null && !spawnerCheckTask.isCancelled()) {
+            spawnerCheckTask.cancel();
+        }
+
+        // Rimuovi tutti gli ologrammi
+        removeAllDebugHolograms();
+
+        // Pulisci i set
+        debugPlayers.clear();
+        activeWorlds.clear();
+        worldMobs.clear();
+    }
+
+    /**
+     * Ferma gli spawner in un mondo specifico (nuovo metodo)
+     */
+    public int stopSpawnersInWorld(String worldName) {
+        World world = Bukkit.getWorld(worldName);
+        if (world == null) {
+            return 0;
+        }
+        return stopSpawnersInWorld(world);
+    }
+
+    /**
+     * Metodo per compatibilità con il vecchio codice
+     */
+    public void stopDebugTask() {
+        stopAllTasks();
+    }
+}

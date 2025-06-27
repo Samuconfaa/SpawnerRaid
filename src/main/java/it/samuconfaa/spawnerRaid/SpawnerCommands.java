@@ -36,6 +36,8 @@ public class SpawnerCommands implements CommandExecutor, TabCompleter {
                 return handleSetSpawner(sender, args);
             case "attivaspawner":
                 return handleAttivaSpawner(sender, args);
+            case "stopspawner":
+                return handleStopSpawner(sender, args);
             case "eliminaspawner":
                 return handleEliminaSpawner(sender, args);
             case "debugspawners":
@@ -55,6 +57,7 @@ public class SpawnerCommands implements CommandExecutor, TabCompleter {
             case "setspawner":
                 return getSetSpawnerCompletions(args);
             case "attivaspawner":
+            case "stopspawner":
                 return getAttivaSpawnerCompletions(args);
             case "eliminaspawner":
                 return getEliminaSpawnerCompletions(args);
@@ -65,6 +68,31 @@ public class SpawnerCommands implements CommandExecutor, TabCompleter {
             default:
                 return completions;
         }
+    }
+
+    private boolean handleStopSpawner(CommandSender sender, String[] args) {
+        if (args.length != 1) {
+            sender.sendMessage(ChatColor.RED + "Uso: /stopspawner <nome_mondo>");
+            return true;
+        }
+
+        String worldName = args[0];
+        World world = Bukkit.getWorld(worldName);
+
+        if (world == null) {
+            sender.sendMessage(ChatColor.RED + "Il mondo '" + worldName + "' non esiste!");
+            return true;
+        }
+
+        int stopped = plugin.getSpawnerManager().stopSpawnersInWorld(world);
+
+        if (stopped == 0) {
+            sender.sendMessage(ChatColor.YELLOW + "Nessuno spawner attivo trovato nel mondo '" + worldName + "'!");
+        } else {
+            sender.sendMessage(ChatColor.GREEN + "Fermati " + stopped + " spawner nel mondo '" + worldName + "'!");
+        }
+
+        return true;
     }
 
     private List<String> getSetSpawnerCompletions(String[] args) {

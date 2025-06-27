@@ -1,8 +1,11 @@
-it\samuconfaa\spawnerRaid\PlayerMoveListener.class
 it\samuconfaa\spawnerRaid\SpawnerManager$1.class
-it\samuconfaa\spawnerRaid\SpawnerRaid.class
 it\samuconfaa\spawnerRaid\SpawnerManager.class
+it\samuconfaa\spawnerRaid\SpawnerManager$2.class
 it\samuconfaa\spawnerRaid\CustomSpawner$SpawnerType.class
-it\samuconfaa\spawnerRaid\CustomSpawner.class
 it\samuconfaa\spawnerRaid\SpawnerCommands.class
+it\samuconfaa\spawnerRaid\PlayerMoveListener.class
+it\samuconfaa\spawnerRaid\SpawnerRaid.class
+it\samuconfaa\spawnerRaid\CustomSpawner.class
+it\samuconfaa\spawnerRaid\SpawnerManager$3.class
 it\samuconfaa\spawnerRaid\ConfigManager.class
+it\samuconfaa\spawnerRaid\CustomSpawner$SpawnerState.class

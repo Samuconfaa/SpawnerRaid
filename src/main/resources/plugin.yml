@@ -36,6 +36,10 @@ commands:
     permission: spawnerraid.debug
     permission-message: §cNon hai il permesso per utilizzare questo comando!
 
+  stopspawner:
+    description: Ferma tutti gli spawner in un mondo
+    usage: /stopspawner <nome_mondo>
+
 permissions:
   spawnerraid.*:
     description: Accesso completo a tutti i comandi di SpawnerRaid

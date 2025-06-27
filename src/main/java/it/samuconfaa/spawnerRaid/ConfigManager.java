@@ -22,6 +22,10 @@ public class ConfigManager {
             config.set("activation-distance", 10.0);
         }
 
+        if (!config.contains("spawn-distance")) {
+            config.set("spawn-distance", 50.0);
+        }
+
         if (!config.contains("messages.spawner-created")) {
             config.set("messages.spawner-created", "&aSpawner '{name}' creato con successo!");
         }
@@ -97,6 +101,10 @@ public class ConfigManager {
 
     public double getActivationDistance() {
         return config.getDouble("activation-distance", 10.0);
+    }
+
+    public double getSpawnDistance() {
+        return config.getDouble("spawn-distance", 50.0);
     }
 
     public String getMessage(String key) {

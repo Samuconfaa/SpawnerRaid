@@ -30,6 +30,9 @@ public class SpawnerRaid extends JavaPlugin {
         getCommand("attivaspawner").setExecutor(commandExecutor);
         getCommand("attivaspawner").setTabCompleter(commandExecutor);
 
+        getCommand("stopspawner").setExecutor(commandExecutor);
+        getCommand("stopspawner").setTabCompleter(commandExecutor);
+
         getCommand("eliminaspawner").setExecutor(commandExecutor);
         getCommand("eliminaspawner").setTabCompleter(commandExecutor);
 
@@ -55,10 +58,12 @@ public class SpawnerRaid extends JavaPlugin {
         if (spawnerManager != null) {
             spawnerManager.saveSpawners();
             spawnerManager.clearActiveMobs();
-            spawnerManager.stopDebugTask(); // Ferma il task di debug
+            spawnerManager.stopAllTasks(); // Usa il metodo corretto
         }
         getLogger().info("SpawnerRaid plugin disabilitato!");
     }
+
+
 
     public static SpawnerRaid getInstance() {
         return instance;
