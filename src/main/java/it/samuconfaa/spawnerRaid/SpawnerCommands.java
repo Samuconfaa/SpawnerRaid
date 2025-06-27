@@ -40,6 +40,8 @@ public class SpawnerCommands implements CommandExecutor, TabCompleter {
                 return handleEliminaSpawner(sender, args);
             case "debugspawners":
                 return handleDebugSpawners(sender, args);
+            case "spawnerdebug":
+                return handleSpawnerDebug(sender, args);
             default:
                 return false;
         }
@@ -57,6 +59,7 @@ public class SpawnerCommands implements CommandExecutor, TabCompleter {
             case "eliminaspawner":
                 return getEliminaSpawnerCompletions(args);
             case "debugspawners":
+            case "spawnerdebug":
                 // Nessun argomento per debug
                 return completions;
             default:
@@ -172,6 +175,32 @@ public class SpawnerCommands implements CommandExecutor, TabCompleter {
         }
 
         return completions;
+    }
+
+    private boolean handleSpawnerDebug(CommandSender sender, String[] args) {
+        if (!(sender instanceof Player)) {
+            sender.sendMessage(ChatColor.RED + "Questo comando può essere eseguito solo da un giocatore!");
+            return true;
+        }
+
+        if (!sender.hasPermission("spawnerraid.debug")) {
+            sender.sendMessage(ChatColor.RED + "Non hai il permesso per utilizzare questo comando!");
+            return true;
+        }
+
+        Player player = (Player) sender;
+
+        boolean isDebugActive = plugin.getSpawnerManager().toggleDebugMode(player);
+
+        if (isDebugActive) {
+            sender.sendMessage(ChatColor.GREEN + "✓ Debug visivo spawner ATTIVATO!");
+            sender.sendMessage(ChatColor.YELLOW + "Ora puoi vedere le particelle sui tuoi spawner.");
+        } else {
+            sender.sendMessage(ChatColor.RED + "✗ Debug visivo spawner DISATTIVATO!");
+            sender.sendMessage(ChatColor.GRAY + "Le particelle non sono più visibili.");
+        }
+
+        return true;
     }
 
     private boolean handleDebugSpawners(CommandSender sender, String[] args) {
