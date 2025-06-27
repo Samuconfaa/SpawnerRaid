@@ -220,7 +220,8 @@ public class SpawnerManager {
         Location loc = spawner.getLocation();
 
         // Verifica che il giocatore sia abbastanza vicino per vedere le particelle (max 50 blocchi)
-        if (player.getLocation().distance(loc) > 50) {
+        // Usa un controllo sicuro per la distanza
+        if (!canCalculateDistance(player.getLocation(), loc) || player.getLocation().distance(loc) > 50) {
             return;
         }
 
@@ -248,6 +249,22 @@ public class SpawnerManager {
 
         // Particelle che salgono verso l'alto
         player.spawnParticle(Particle.END_ROD, loc.clone().add(0, 1, 0), 2, 0.1, 0.5, 0.1, 0.02);
+    }
+
+    /**
+     * Verifica se è possibile calcolare la distanza tra due location
+     */
+    private boolean canCalculateDistance(Location loc1, Location loc2) {
+        if (loc1 == null || loc2 == null) {
+            return false;
+        }
+
+        if (loc1.getWorld() == null || loc2.getWorld() == null) {
+            return false;
+        }
+
+        // Confronta per nome mondo invece che per oggetto
+        return loc1.getWorld().getName().equals(loc2.getWorld().getName());
     }
 
     /**
@@ -578,25 +595,41 @@ public class SpawnerManager {
 
     public void activateMobsNearPlayer(Player player) {
         double activationDistance = plugin.getConfigManager().getActivationDistance();
+        Location playerLocation = player.getLocation();
+
+        // Pulizia preliminare dei mob non validi per evitare problemi
+        Set<Entity> invalidMobs = new HashSet<>();
+        for (Entity mob : activeMobs) {
+            if (mob.isDead() || !mob.isValid()) {
+                invalidMobs.add(mob);
+            }
+        }
+        activeMobs.removeAll(invalidMobs);
 
         for (Entity mob : new HashSet<>(activeMobs)) {
-            if (mob.isDead() || !mob.isValid()) {
-                activeMobs.remove(mob);
-                continue;
-            }
+            try {
+                Location mobLocation = mob.getLocation();
 
-            // Verifica che il mob sia nello stesso mondo del giocatore (confronta per nome)
-            if (!mob.getWorld().getName().equals(player.getWorld().getName())) {
-                continue;
-            }
+                // Verifica che il mob e il giocatore siano validi e nello stesso mondo
+                if (!canCalculateDistance(playerLocation, mobLocation)) {
+                    continue;
+                }
 
-            if (mob.getLocation().distance(player.getLocation()) <= activationDistance) {
-                if (mob instanceof org.bukkit.entity.LivingEntity) {
-                    org.bukkit.entity.LivingEntity livingEntity = (org.bukkit.entity.LivingEntity) mob;
-                    if (!livingEntity.hasAI()) {
-                        livingEntity.setAI(true);
+                // Calcola la distanza in modo sicuro
+                double distance = playerLocation.distance(mobLocation);
+
+                if (distance <= activationDistance) {
+                    if (mob instanceof org.bukkit.entity.LivingEntity) {
+                        org.bukkit.entity.LivingEntity livingEntity = (org.bukkit.entity.LivingEntity) mob;
+                        if (!livingEntity.hasAI()) {
+                            livingEntity.setAI(true);
+                        }
                     }
                 }
+            } catch (Exception e) {
+                // Se c'è un errore con questo mob specifico, rimuovilo dalla lista
+                plugin.getLogger().warning("Errore nell'attivazione del mob " + mob.getType() + " (ID: " + mob.getEntityId() + "): " + e.getMessage());
+                activeMobs.remove(mob);
             }
         }
     }
