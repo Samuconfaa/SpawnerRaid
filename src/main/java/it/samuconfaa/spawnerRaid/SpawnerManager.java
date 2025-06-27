@@ -170,18 +170,31 @@ public class SpawnerManager {
                     continue; // Spawner non in attesa
                 }
 
-                if (!canCalculateDistance(playerLocation, spawner.getLocation())) {
+                Location spawnerLocation = spawner.getLocation();
+
+                // Controllo più robusto per la validità delle location
+                if (!isLocationValid(playerLocation) || !isLocationValid(spawnerLocation)) {
+                    continue;
+                }
+
+                if (!canCalculateDistance(playerLocation, spawnerLocation)) {
                     continue; // Non si può calcolare la distanza
                 }
 
-                double distance = playerLocation.distance(spawner.getLocation());
+                try {
+                    double distance = playerLocation.distance(spawnerLocation);
 
-                if (distance <= plugin.getConfigManager().getSpawnDistance()) { // 20 blocchi di distanza
-                    plugin.getLogger().info("Giocatore " + player.getName() + " è vicino allo spawner " +
-                            spawner.getName() + " (distanza: " + String.format("%.2f", distance) + ")");
+                    if (distance <= plugin.getConfigManager().getSpawnDistance()) { // 20 blocchi di distanza
+                        plugin.getLogger().info("Giocatore " + player.getName() + " è vicino allo spawner " +
+                                spawner.getName() + " (distanza: " + String.format("%.2f", distance) + ")");
 
-                    spawnMobsFromSpawner(spawner, worldName);
-                    break; // Spawna solo da uno spawner per volta per giocatore
+                        spawnMobsFromSpawner(spawner, worldName);
+                        break; // Spawna solo da uno spawner per volta per giocatore
+                    }
+                } catch (IllegalArgumentException e) {
+                    plugin.getLogger().warning("Errore nel calcolo della distanza per lo spawner " +
+                            spawner.getName() + ": " + e.getMessage());
+                    continue;
                 }
             }
         }
@@ -523,20 +536,44 @@ public class SpawnerManager {
             }
         }
     }
+    /**
+     * Verifica se una location è valida per i calcoli
+     */
+    private boolean isLocationValid(Location location) {
+        if (location == null) {
+            return false;
+        }
+
+        if (location.getWorld() == null) {
+            return false;
+        }
+
+        // Controlla che le coordinate non siano NaN o infinite
+        if (Double.isNaN(location.getX()) || Double.isNaN(location.getY()) || Double.isNaN(location.getZ())) {
+            return false;
+        }
+
+        if (Double.isInfinite(location.getX()) || Double.isInfinite(location.getY()) || Double.isInfinite(location.getZ())) {
+            return false;
+        }
+
+        return true;
+    }
 
     /**
-     * Verifica se è possibile calcolare la distanza tra due location
+     * Verifica se è possibile calcolare la distanza tra due location (versione aggiornata)
      */
     private boolean canCalculateDistance(Location loc1, Location loc2) {
-        if (loc1 == null || loc2 == null) {
+        if (!isLocationValid(loc1) || !isLocationValid(loc2)) {
             return false;
         }
 
-        if (loc1.getWorld() == null || loc2.getWorld() == null) {
+        // Controlla che i mondi siano gli stessi
+        if (!loc1.getWorld().getName().equals(loc2.getWorld().getName())) {
             return false;
         }
 
-        return loc1.getWorld().getName().equals(loc2.getWorld().getName());
+        return true;
     }
 
     /**
