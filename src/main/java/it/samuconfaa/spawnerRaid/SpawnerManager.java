@@ -17,6 +17,7 @@ import io.lumine.mythic.bukkit.MythicBukkit;
 import it.samuconfaa.spawnerRaid.SpawnerRaid;
 import it.samuconfaa.spawnerRaid.CustomSpawner;
 import it.samuconfaa.spawnerRaid.CustomSpawner.SpawnerType;
+import it.samuconfaa.spawnerRaid.CustomSpawner.SpawnerState;
 
 import java.io.File;
 import java.io.IOException;
@@ -27,9 +28,12 @@ public class SpawnerManager {
     private final SpawnerRaid plugin;
     private final Map<String, CustomSpawner> spawners;
     private final Set<Entity> activeMobs;
-    private final Set<Player> debugPlayers; // Giocatori che hanno il debug attivo
-    private final Map<String, Hologram> debugHolograms; // Mappa per gestire gli ologrammi di debug
-    private BukkitRunnable debugTask; // Task per mostrare le particelle
+    private final Set<Player> debugPlayers;
+    private final Map<String, Hologram> debugHolograms;
+    private final Map<String, Set<CustomSpawner>> activeWorlds; // Mondi con spawner attivi
+    private final Map<String, Set<Entity>> worldMobs; // Mob per mondo
+    private BukkitRunnable debugTask;
+    private BukkitRunnable spawnerCheckTask; // Task per controllare spawner attivi
     private File spawnersFile;
     private YamlConfiguration spawnersConfig;
 
@@ -39,6 +43,8 @@ public class SpawnerManager {
         this.activeMobs = new HashSet<>();
         this.debugPlayers = new HashSet<>();
         this.debugHolograms = new HashMap<>();
+        this.activeWorlds = new HashMap<>();
+        this.worldMobs = new HashMap<>();
 
         // Crea il file spawners.yml
         spawnersFile = new File(plugin.getDataFolder(), "spawners.yml");
@@ -52,23 +58,201 @@ public class SpawnerManager {
         }
         spawnersConfig = YamlConfiguration.loadConfiguration(spawnersFile);
 
-        // Inizializza il task per il debug visivo
+        // Inizializza i task
         startDebugTask();
+        startSpawnerCheckTask();
+    }
+
+    /**
+     * Attiva gli spawner in un mondo specifico
+     */
+    public int activateSpawnersInWorld(World world) {
+        plugin.getLogger().info("Attivazione spawner nel mondo: " + world.getName());
+
+        // Carica gli spawner per questo mondo se necessario
+        loadSpawnersForWorld(world);
+
+        // Crea il set di spawner attivi per questo mondo
+        Set<CustomSpawner> worldSpawners = new HashSet<>();
+
+        for (CustomSpawner spawner : spawners.values()) {
+            if (spawner.getLocation().getWorld().getName().equals(world.getName())) {
+                spawner.setState(SpawnerState.WAITING);
+                worldSpawners.add(spawner);
+                plugin.getLogger().info("Spawner '" + spawner.getName() + "' impostato in attesa");
+            }
+        }
+
+        activeWorlds.put(world.getName(), worldSpawners);
+        worldMobs.put(world.getName(), new HashSet<>());
+
+        // Aggiorna gli ologrammi se il debug è attivo
+        updateDebugHolograms();
+
+        plugin.getLogger().info("Attivati " + worldSpawners.size() + " spawner nel mondo '" + world.getName() + "'");
+        return worldSpawners.size();
+    }
+
+    /**
+     * Ferma gli spawner in un mondo specifico
+     */
+    public int stopSpawnersInWorld(World world) {
+        plugin.getLogger().info("Fermando spawner nel mondo: " + world.getName());
+
+        Set<CustomSpawner> worldSpawners = activeWorlds.get(world.getName());
+        if (worldSpawners == null) {
+            return 0;
+        }
+
+        // Cambia stato degli spawner
+        for (CustomSpawner spawner : worldSpawners) {
+            spawner.setState(SpawnerState.STOPPED);
+        }
+
+        // Rimuovi mob del mondo
+        Set<Entity> mobsToRemove = worldMobs.get(world.getName());
+        if (mobsToRemove != null) {
+            for (Entity mob : mobsToRemove) {
+                if (!mob.isDead() && mob.isValid()) {
+                    mob.remove();
+                }
+            }
+            mobsToRemove.clear();
+        }
+
+        // Rimuovi il mondo dagli attivi
+        int stoppedCount = worldSpawners.size();
+        activeWorlds.remove(world.getName());
+        worldMobs.remove(world.getName());
+
+        // Aggiorna gli ologrammi
+        updateDebugHolograms();
+
+        plugin.getLogger().info("Fermati " + stoppedCount + " spawner nel mondo '" + world.getName() + "'");
+        return stoppedCount;
+    }
+
+    /**
+     * Task che controlla continuamente i giocatori vicini agli spawner attivi
+     */
+    private void startSpawnerCheckTask() {
+        spawnerCheckTask = new BukkitRunnable() {
+            @Override
+            public void run() {
+                checkSpawnersForAllPlayers();
+            }
+        };
+
+        // Esegui ogni 40 tick (2 secondi) per non sovraccaricare il server
+        spawnerCheckTask.runTaskTimer(plugin, 0L, 40L);
+    }
+
+    /**
+     * Controlla tutti i giocatori online per vedere se sono vicini a spawner in attesa
+     */
+    private void checkSpawnersForAllPlayers() {
+        if (activeWorlds.isEmpty()) {
+            return; // Nessun mondo con spawner attivi
+        }
+
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            String worldName = player.getWorld().getName();
+            Set<CustomSpawner> worldSpawners = activeWorlds.get(worldName);
+
+            if (worldSpawners == null) {
+                continue; // Questo mondo non ha spawner attivi
+            }
+
+            Location playerLocation = player.getLocation();
+
+            for (CustomSpawner spawner : new HashSet<>(worldSpawners)) {
+                if (spawner.getState() != SpawnerState.WAITING) {
+                    continue; // Spawner non in attesa
+                }
+
+                if (!canCalculateDistance(playerLocation, spawner.getLocation())) {
+                    continue; // Non si può calcolare la distanza
+                }
+
+                double distance = playerLocation.distance(spawner.getLocation());
+
+                if (distance <= 20.0) { // 20 blocchi di distanza
+                    plugin.getLogger().info("Giocatore " + player.getName() + " è vicino allo spawner " +
+                            spawner.getName() + " (distanza: " + String.format("%.2f", distance) + ")");
+
+                    spawnMobsFromSpawner(spawner, worldName);
+                    break; // Spawna solo da uno spawner per volta per giocatore
+                }
+            }
+        }
+    }
+
+    /**
+     * Spawna i mob da uno spawner specifico
+     */
+    private void spawnMobsFromSpawner(CustomSpawner spawner, String worldName) {
+        plugin.getLogger().info("Spawning mob da: " + spawner.getName());
+
+        Location location = spawner.getLocation();
+        Set<Entity> worldMobSet = worldMobs.get(worldName);
+
+        int spawnedCount = 0;
+        for (int i = 0; i < spawner.getQuantity(); i++) {
+            // Offset casuale per evitare sovrapposizioni
+            double offsetX = (Math.random() - 0.5) * 3;
+            double offsetZ = (Math.random() - 0.5) * 3;
+            Location spawnLoc = location.clone().add(offsetX, 0, offsetZ);
+
+            Entity entity = null;
+
+            if (spawner.getSpawnerType() == SpawnerType.VANILLA) {
+                // Spawn di mob vanilla
+                try {
+                    EntityType entityType = EntityType.valueOf(spawner.getMobType().toUpperCase());
+                    entity = spawnLoc.getWorld().spawnEntity(spawnLoc, entityType);
+                    spawnedCount++;
+                } catch (Exception e) {
+                    plugin.getLogger().warning("Errore spawn mob vanilla " + spawner.getMobType() + ": " + e.getMessage());
+                }
+            } else {
+                // Spawn di mob MythicMobs
+                try {
+                    entity = MythicBukkit.inst().getMobManager()
+                            .spawnMob(spawner.getMobType(), BukkitAdapter.adapt(spawnLoc))
+                            .getEntity().getBukkitEntity();
+                    spawnedCount++;
+                } catch (Exception e) {
+                    plugin.getLogger().warning("Errore spawn mob MythicMobs " + spawner.getMobType() + ": " + e.getMessage());
+                }
+            }
+
+            if (entity != null) {
+                // Configura il mob
+                entity.setPersistent(true);
+
+                // Aggiungi ai set
+                activeMobs.add(entity);
+                worldMobSet.add(entity);
+            }
+        }
+
+        // Cambia stato dello spawner
+        spawner.setState(SpawnerState.SPAWNED);
+
+        // Aggiorna ologrammi se necessario
+        updateDebugHologramForSpawner(spawner);
+
+        plugin.getLogger().info("Spawnati " + spawnedCount + " mob dallo spawner " + spawner.getName());
     }
 
     /**
      * Attiva/disattiva il debug visivo per un giocatore
-     * @param player Il giocatore
-     * @return true se il debug è ora attivo, false se è disattivato
      */
     public boolean toggleDebugMode(Player player) {
         if (debugPlayers.contains(player)) {
             debugPlayers.remove(player);
-
-            // Rimuovi il giocatore dalla visibilità degli ologrammi
             updateHologramVisibility(player, false);
 
-            // Se nessun giocatore ha più il debug attivo, rimuovi tutti gli ologrammi
             if (debugPlayers.isEmpty()) {
                 removeAllDebugHolograms();
             }
@@ -77,11 +261,9 @@ public class SpawnerManager {
         } else {
             debugPlayers.add(player);
 
-            // Se è il primo giocatore ad attivare il debug, crea gli ologrammi
             if (debugPlayers.size() == 1) {
                 createDebugHolograms();
             } else {
-                // Se gli ologrammi esistono già, mostrali a questo giocatore
                 updateHologramVisibility(player, true);
             }
 
@@ -117,7 +299,7 @@ public class SpawnerManager {
         List<String> lines = new ArrayList<>();
         lines.add("&e&l[" + spawner.getName() + "]");
 
-        // Seconda riga con informazioni sul mob
+        // Informazioni sul mob con colore basato sul tipo
         String mobInfo;
         if (spawner.getSpawnerType() == SpawnerType.VANILLA) {
             mobInfo = "&a" + spawner.getMobType() + " &7x&b" + spawner.getQuantity();
@@ -126,23 +308,51 @@ public class SpawnerManager {
         }
         lines.add(mobInfo);
 
+        // Stato dello spawner (nuova linea)
+        lines.add("&7Stato: " + spawner.getState().getDisplayName());
+
         // Crea l'ologramma
         try {
             Hologram hologram = DHAPI.createHologram(hologramId, hologramLocation, lines);
-
-            // Imposta l'ologramma come nascosto di default
             hologram.setDefaultVisibleState(false);
 
-            // Mostra l'ologramma solo ai giocatori in debug
+            // Mostra solo ai giocatori in debug
             for (Player debugPlayer : debugPlayers) {
                 hologram.setShowPlayer(debugPlayer);
             }
 
             debugHolograms.put(hologramId, hologram);
-            plugin.getLogger().info("Creato ologramma debug per spawner: " + spawner.getName());
         } catch (Exception e) {
-            plugin.getLogger().warning("Errore nella creazione dell'ologramma per spawner " + spawner.getName() + ": " + e.getMessage());
+            plugin.getLogger().warning("Errore creazione ologramma per " + spawner.getName() + ": " + e.getMessage());
         }
+    }
+
+    /**
+     * Aggiorna l'ologramma di un singolo spawner
+     */
+    private void updateDebugHologramForSpawner(CustomSpawner spawner) {
+        if (debugPlayers.isEmpty()) {
+            return; // Nessuno sta guardando il debug
+        }
+
+        String hologramId = "spawner_debug_" + spawner.getName();
+        if (debugHolograms.containsKey(hologramId)) {
+            // Ricrea l'ologramma con le nuove informazioni
+            createHologramForSpawner(spawner);
+        }
+    }
+
+    /**
+     * Aggiorna tutti gli ologrammi di debug
+     */
+    private void updateDebugHolograms() {
+        if (debugPlayers.isEmpty()) {
+            return;
+        }
+
+        // Ricrea tutti gli ologrammi
+        removeAllDebugHolograms();
+        createDebugHolograms();
     }
 
     /**
@@ -153,9 +363,8 @@ public class SpawnerManager {
             try {
                 DHAPI.removeHologram(hologramId);
                 debugHolograms.remove(hologramId);
-                plugin.getLogger().info("Rimosso ologramma debug: " + hologramId);
             } catch (Exception e) {
-                plugin.getLogger().warning("Errore nella rimozione dell'ologramma " + hologramId + ": " + e.getMessage());
+                plugin.getLogger().warning("Errore rimozione ologramma " + hologramId + ": " + e.getMessage());
             }
         }
     }
@@ -172,7 +381,7 @@ public class SpawnerManager {
                     hologram.removeShowPlayer(player);
                 }
             } catch (Exception e) {
-                plugin.getLogger().warning("Errore nell'aggiornamento visibilità ologramma per " + player.getName() + ": " + e.getMessage());
+                plugin.getLogger().warning("Errore aggiornamento visibilità per " + player.getName() + ": " + e.getMessage());
             }
         }
     }
@@ -185,21 +394,18 @@ public class SpawnerManager {
             @Override
             public void run() {
                 if (debugPlayers.isEmpty()) {
-                    return; // Non fare nulla se nessuno ha il debug attivo
+                    return;
                 }
 
                 for (Player player : new HashSet<>(debugPlayers)) {
                     if (!player.isOnline()) {
                         debugPlayers.remove(player);
-
-                        // Se era l'ultimo giocatore, rimuovi gli ologrammi
                         if (debugPlayers.isEmpty()) {
                             removeAllDebugHolograms();
                         }
                         continue;
                     }
 
-                    // Mostra particelle solo per gli spawner nel mondo del giocatore
                     for (CustomSpawner spawner : spawners.values()) {
                         if (spawner.getLocation().getWorld().getName().equals(player.getWorld().getName())) {
                             showDebugParticles(player, spawner);
@@ -209,7 +415,6 @@ public class SpawnerManager {
             }
         };
 
-        // Esegui ogni 20 tick (1 secondo)
         debugTask.runTaskTimer(plugin, 0L, 20L);
     }
 
@@ -219,21 +424,35 @@ public class SpawnerManager {
     private void showDebugParticles(Player player, CustomSpawner spawner) {
         Location loc = spawner.getLocation();
 
-        // Verifica che il giocatore sia abbastanza vicino per vedere le particelle (max 50 blocchi)
-        // Usa un controllo sicuro per la distanza
         if (!canCalculateDistance(player.getLocation(), loc) || player.getLocation().distance(loc) > 50) {
             return;
         }
 
-        // Particelle diverse in base al tipo di spawner
+        // Particelle diverse in base al tipo e stato
         Particle particle;
         if (spawner.getSpawnerType() == SpawnerType.VANILLA) {
-            particle = Particle.FLAME; // Fiamme rosse per mob vanilla
+            particle = Particle.FLAME;
         } else {
-            particle = Particle.DRAGON_BREATH; // Particelle viola per MythicMobs
+            particle = Particle.DRAGON_BREATH;
         }
 
-        // Crea un cerchio di particelle attorno alla posizione dello spawner
+        // Colore diverso in base allo stato
+        switch (spawner.getState()) {
+            case INACTIVE:
+                particle = Particle.SMOKE_NORMAL;
+                break;
+            case WAITING:
+                particle = Particle.VILLAGER_HAPPY;
+                break;
+            case SPAWNED:
+                particle = Particle.HEART;
+                break;
+            case STOPPED:
+                particle = Particle.BARRIER;
+                break;
+        }
+
+        // Cerchio di particelle
         for (int i = 0; i < 8; i++) {
             double angle = 2 * Math.PI * i / 8;
             double x = loc.getX() + Math.cos(angle) * 1.5;
@@ -244,11 +463,8 @@ public class SpawnerManager {
             player.spawnParticle(particle, particleLoc, 1, 0, 0, 0, 0);
         }
 
-        // Particella centrale più grande
+        // Particella centrale
         player.spawnParticle(particle, loc.clone().add(0, 1, 0), 3, 0.2, 0.2, 0.2, 0);
-
-        // Particelle che salgono verso l'alto
-        player.spawnParticle(Particle.END_ROD, loc.clone().add(0, 1, 0), 2, 0.1, 0.5, 0.1, 0.02);
     }
 
     /**
@@ -263,38 +479,55 @@ public class SpawnerManager {
             return false;
         }
 
-        // Confronta per nome mondo invece che per oggetto
         return loc1.getWorld().getName().equals(loc2.getWorld().getName());
     }
 
     /**
-     * Ferma il task di debug quando il plugin si disabilita
+     * Attiva i mob vicini al giocatore (logica originale mantenuta)
      */
-    public void stopDebugTask() {
-        if (debugTask != null && !debugTask.isCancelled()) {
-            debugTask.cancel();
-        }
+    public void activateMobsNearPlayer(Player player) {
+        double activationDistance = plugin.getConfigManager().getActivationDistance();
+        Location playerLocation = player.getLocation();
 
-        // Rimuovi tutti gli ologrammi
-        removeAllDebugHolograms();
+        // Pulizia preliminare
+        Set<Entity> invalidMobs = new HashSet<>();
+        for (Entity mob : activeMobs) {
+            if (mob.isDead() || !mob.isValid()) {
+                invalidMobs.add(mob);
+            }
+        }
+        activeMobs.removeAll(invalidMobs);
+
+        for (Entity mob : new HashSet<>(activeMobs)) {
+            try {
+                Location mobLocation = mob.getLocation();
+
+                if (!canCalculateDistance(playerLocation, mobLocation)) {
+                    continue;
+                }
+
+                double distance = playerLocation.distance(mobLocation);
+
+                if (distance <= activationDistance) {
+                    if (mob instanceof org.bukkit.entity.LivingEntity) {
+                        org.bukkit.entity.LivingEntity livingEntity = (org.bukkit.entity.LivingEntity) mob;
+                        if (!livingEntity.hasAI()) {
+                            livingEntity.setAI(true);
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                plugin.getLogger().warning("Errore attivazione mob " + mob.getType() + ": " + e.getMessage());
+                activeMobs.remove(mob);
+            }
+        }
     }
 
-    /**
-     * Gestisce l'entrata di un giocatore nel server
-     */
-    public void onPlayerJoin(Player player) {
-        // Gli ologrammi sono già impostati come nascosti di default,
-        // quindi non è necessario fare nulla per i nuovi giocatori
-        // a meno che non siano già nella lista debug
-        if (debugPlayers.contains(player)) {
-            updateHologramVisibility(player, true);
-        }
-    }
+    // Metodi di gestione file e spawner (mantenuti dal codice originale ma aggiornati)
 
     public void addSpawner(CustomSpawner spawner) {
         spawners.put(spawner.getName(), spawner);
 
-        // Se ci sono giocatori in debug, crea l'ologramma per il nuovo spawner
         if (!debugPlayers.isEmpty()) {
             createHologramForSpawner(spawner);
         }
@@ -308,7 +541,6 @@ public class SpawnerManager {
         CustomSpawner removed = spawners.remove(name);
 
         if (removed != null) {
-            // Rimuovi l'ologramma associato se esiste
             String hologramId = "spawner_debug_" + name;
             if (debugHolograms.containsKey(hologramId)) {
                 DHAPI.removeHologram(hologramId);
@@ -333,7 +565,7 @@ public class SpawnerManager {
             section.set("z", loc.getZ());
             section.set("mobType", spawner.getMobType());
             section.set("quantity", spawner.getQuantity());
-            section.set("spawnerType", spawner.getSpawnerType().name()); // Salva il tipo di spawner
+            section.set("spawnerType", spawner.getSpawnerType().name());
         }
 
         try {
@@ -366,14 +598,13 @@ public class SpawnerManager {
             String mobType = section.getString("mobType");
             int quantity = section.getInt("quantity");
 
-            // Carica il tipo di spawner, default a MYTHICMOB per compatibilità con versioni precedenti
             SpawnerType spawnerType = SpawnerType.MYTHICMOB;
             String spawnerTypeStr = section.getString("spawnerType");
             if (spawnerTypeStr != null) {
                 try {
                     spawnerType = SpawnerType.valueOf(spawnerTypeStr);
                 } catch (IllegalArgumentException e) {
-                    plugin.getLogger().warning("Tipo spawner non valido '" + spawnerTypeStr + "' per lo spawner '" + name + "'. Utilizzando MYTHICMOB come default.");
+                    plugin.getLogger().warning("Tipo spawner non valido '" + spawnerTypeStr + "' per lo spawner '" + name + "'");
                 }
             }
 
@@ -385,116 +616,36 @@ public class SpawnerManager {
 
         plugin.getLogger().info("Caricati " + spawners.size() + " spawner dal file.");
 
-        // Se ci sono giocatori in debug, ricrea gli ologrammi
         if (!debugPlayers.isEmpty()) {
             removeAllDebugHolograms();
             createDebugHolograms();
         }
     }
 
-    public int activateSpawnersInWorld(World world) {
-        plugin.getLogger().info("Tentativo di attivazione spawner nel mondo: " + world.getName());
-
-        // Prima controlla se ci sono spawner in memoria per questo mondo (confronta per NOME, non per oggetto)
-        long spawnersInWorldCount = spawners.values().stream()
-                .filter(spawner -> spawner.getLocation().getWorld().getName().equals(world.getName()))
-                .count();
-
-        plugin.getLogger().info("Spawner in memoria per il mondo '" + world.getName() + "': " + spawnersInWorldCount);
-
-        // Se gli spawner esistono ma hanno un riferimento al mondo vecchio, aggiornali
-        boolean needsWorldUpdate = false;
-        for (CustomSpawner spawner : new ArrayList<>(spawners.values())) {
-            if (spawner.getLocation().getWorld().getName().equals(world.getName()) &&
-                    !spawner.getLocation().getWorld().equals(world)) {
-                plugin.getLogger().info("Spawner '" + spawner.getName() + "' ha riferimento mondo obsoleto, aggiorno...");
-                needsWorldUpdate = true;
-
-                // Rimuovi il vecchio e aggiungi con il nuovo riferimento mondo
-                spawners.remove(spawner.getName());
-                Location newLocation = new Location(world,
-                        spawner.getLocation().getX(),
-                        spawner.getLocation().getY(),
-                        spawner.getLocation().getZ());
-                CustomSpawner updatedSpawner = new CustomSpawner(
-                        spawner.getName(),
-                        newLocation,
-                        spawner.getMobType(),
-                        spawner.getQuantity(),
-                        spawner.getSpawnerType()); // Mantieni il tipo di spawner
-                spawners.put(updatedSpawner.getName(), updatedSpawner);
-                plugin.getLogger().info("Spawner '" + spawner.getName() + "' aggiornato con nuovo riferimento mondo");
-            }
-        }
-
-        // Se non ci sono spawner in memoria per questo mondo, prova a ricaricare dal file
-        if (spawnersInWorldCount == 0 && !needsWorldUpdate) {
-            plugin.getLogger().info("Nessuno spawner trovato in memoria per il mondo '" + world.getName() + "', ricarico dal file...");
-            loadSpawnersForWorld(world);
-        }
-
-        // Ricontrolla dopo eventuali aggiornamenti
-        spawnersInWorldCount = spawners.values().stream()
-                .filter(spawner -> spawner.getLocation().getWorld().getName().equals(world.getName()))
-                .count();
-
-        plugin.getLogger().info("Spawner finali per il mondo '" + world.getName() + "': " + spawnersInWorldCount);
-
-        int activated = 0;
-        for (CustomSpawner spawner : spawners.values()) {
-            // Confronta per nome mondo, non per oggetto World
-            if (spawner.getLocation().getWorld().getName().equals(world.getName())) {
-                plugin.getLogger().info("Attivando spawner: " + spawner.getName() + " (" + spawner.getSpawnerType() + ") nel mondo: " + world.getName());
-                spawnMobs(spawner);
-                activated++;
-            }
-        }
-
-        plugin.getLogger().info("Totale spawner attivati nel mondo '" + world.getName() + "': " + activated);
-        return activated;
-    }
-
-    // Metodo migliorato per caricare solo gli spawner di un mondo specifico
     private void loadSpawnersForWorld(World world) {
-        plugin.getLogger().info("Tentativo di caricamento spawner per il mondo: " + world.getName());
-
-        // Ricarica sempre il file per essere sicuri di avere i dati più recenti
         spawnersConfig = YamlConfiguration.loadConfiguration(spawnersFile);
 
         ConfigurationSection spawnersSection = spawnersConfig.getConfigurationSection("spawners");
         if (spawnersSection == null) {
-            plugin.getLogger().warning("Sezione 'spawners' non trovata nel file spawners.yml");
             return;
         }
 
-        plugin.getLogger().info("Spawner trovati nel file: " + spawnersSection.getKeys(false).size());
-
         int loadedCount = 0;
         for (String name : spawnersSection.getKeys(false)) {
-            plugin.getLogger().info("Processando spawner: " + name);
-
             ConfigurationSection section = spawnersSection.getConfigurationSection(name);
-            if (section == null) {
-                plugin.getLogger().warning("Sezione spawner '" + name + "' è null");
-                continue;
-            }
+            if (section == null) continue;
 
             String worldName = section.getString("world");
-            plugin.getLogger().info("Spawner '" + name + "' è nel mondo: " + worldName + " (cercando: " + world.getName() + ")");
 
-            // Carica solo gli spawner del mondo specificato
             if (!world.getName().equals(worldName)) {
-                plugin.getLogger().info("Spawner '" + name + "' saltato perché in mondo diverso");
                 continue;
             }
 
-            // Controlla se lo spawner esiste già (confronta per nome mondo, non oggetto)
             boolean alreadyExists = spawners.values().stream()
                     .anyMatch(existing -> existing.getName().equals(name) &&
                             existing.getLocation().getWorld().getName().equals(worldName));
 
             if (alreadyExists) {
-                plugin.getLogger().info("Spawner '" + name + "' già presente in memoria per questo mondo, saltato");
                 continue;
             }
 
@@ -505,133 +656,32 @@ public class SpawnerManager {
                 String mobType = section.getString("mobType");
                 int quantity = section.getInt("quantity");
 
-                // Carica il tipo di spawner
                 SpawnerType spawnerType = SpawnerType.MYTHICMOB;
                 String spawnerTypeStr = section.getString("spawnerType");
                 if (spawnerTypeStr != null) {
                     try {
                         spawnerType = SpawnerType.valueOf(spawnerTypeStr);
                     } catch (IllegalArgumentException e) {
-                        plugin.getLogger().warning("Tipo spawner non valido '" + spawnerTypeStr + "' per lo spawner '" + name + "'. Utilizzando MYTHICMOB come default.");
+                        plugin.getLogger().warning("Tipo spawner non valido '" + spawnerTypeStr + "'");
                     }
                 }
-
-                plugin.getLogger().info("Caricamento spawner '" + name + "' - Posizione: " + x + "," + y + "," + z +
-                        " - Mob: " + mobType + " - Quantità: " + quantity + " - Tipo: " + spawnerType);
 
                 Location location = new Location(world, x, y, z);
                 CustomSpawner spawner = new CustomSpawner(name, location, mobType, quantity, spawnerType);
 
                 spawners.put(name, spawner);
 
-                // Se ci sono giocatori in debug, crea l'ologramma
                 if (!debugPlayers.isEmpty()) {
                     createHologramForSpawner(spawner);
                 }
 
                 loadedCount++;
-                plugin.getLogger().info("Spawner '" + name + "' caricato con successo per il mondo '" + worldName + "'");
             } catch (Exception e) {
                 plugin.getLogger().severe("Errore nel caricamento dello spawner '" + name + "': " + e.getMessage());
-                e.printStackTrace();
             }
         }
 
         plugin.getLogger().info("Caricati " + loadedCount + " spawner per il mondo '" + world.getName() + "'");
-    }
-
-    private void spawnMobs(CustomSpawner spawner) {
-        Location location = spawner.getLocation();
-
-        for (int i = 0; i < spawner.getQuantity(); i++) {
-            // Offset casuale per evitare che i mob si sovrappongano
-            double offsetX = (Math.random() - 0.5) * 2;
-            double offsetZ = (Math.random() - 0.5) * 2;
-            Location spawnLoc = location.clone().add(offsetX, 0, offsetZ);
-
-            Entity entity = null;
-
-            if (spawner.getSpawnerType() == SpawnerType.VANILLA) {
-                // Spawn di mob vanilla
-                try {
-                    EntityType entityType = EntityType.valueOf(spawner.getMobType().toUpperCase());
-                    entity = spawnLoc.getWorld().spawnEntity(spawnLoc, entityType);
-                    plugin.getLogger().info("Spawnato mob vanilla: " + entityType + " alla posizione " + spawnLoc);
-                } catch (IllegalArgumentException e) {
-                    plugin.getLogger().warning("Tipo di entità vanilla non valido: " + spawner.getMobType());
-                    continue;
-                } catch (Exception e) {
-                    plugin.getLogger().warning("Errore nel spawn del mob vanilla " + spawner.getMobType() + ": " + e.getMessage());
-                    continue;
-                }
-            } else {
-                // Spawn di mob MythicMobs usando la nuova API
-                try {
-                    entity = MythicBukkit.inst().getMobManager()
-                            .spawnMob(spawner.getMobType(), BukkitAdapter.adapt(spawnLoc))
-                            .getEntity().getBukkitEntity();
-                    plugin.getLogger().info("Spawnato mob MythicMobs: " + spawner.getMobType() + " alla posizione " + spawnLoc);
-                } catch (Exception e) {
-                    plugin.getLogger().warning("Errore nel spawn del mob MythicMobs " + spawner.getMobType() + ": " + e.getMessage());
-                    continue;
-                }
-            }
-
-            if (entity != null) {
-                // Rimuovi l'AI per far rimanere il mob fermo
-                if (entity instanceof org.bukkit.entity.LivingEntity) {
-                    org.bukkit.entity.LivingEntity livingEntity = (org.bukkit.entity.LivingEntity) entity;
-                    livingEntity.setAI(false);
-                }
-
-                // Imposta per non despawnare
-                entity.setPersistent(true);
-
-                // Aggiungi alla lista dei mob attivi
-                activeMobs.add(entity);
-            }
-        }
-    }
-
-    public void activateMobsNearPlayer(Player player) {
-        double activationDistance = plugin.getConfigManager().getActivationDistance();
-        Location playerLocation = player.getLocation();
-
-        // Pulizia preliminare dei mob non validi per evitare problemi
-        Set<Entity> invalidMobs = new HashSet<>();
-        for (Entity mob : activeMobs) {
-            if (mob.isDead() || !mob.isValid()) {
-                invalidMobs.add(mob);
-            }
-        }
-        activeMobs.removeAll(invalidMobs);
-
-        for (Entity mob : new HashSet<>(activeMobs)) {
-            try {
-                Location mobLocation = mob.getLocation();
-
-                // Verifica che il mob e il giocatore siano validi e nello stesso mondo
-                if (!canCalculateDistance(playerLocation, mobLocation)) {
-                    continue;
-                }
-
-                // Calcola la distanza in modo sicuro
-                double distance = playerLocation.distance(mobLocation);
-
-                if (distance <= activationDistance) {
-                    if (mob instanceof org.bukkit.entity.LivingEntity) {
-                        org.bukkit.entity.LivingEntity livingEntity = (org.bukkit.entity.LivingEntity) mob;
-                        if (!livingEntity.hasAI()) {
-                            livingEntity.setAI(true);
-                        }
-                    }
-                }
-            } catch (Exception e) {
-                // Se c'è un errore con questo mob specifico, rimuovilo dalla lista
-                plugin.getLogger().warning("Errore nell'attivazione del mob " + mob.getType() + " (ID: " + mob.getEntityId() + "): " + e.getMessage());
-                activeMobs.remove(mob);
-            }
-        }
     }
 
     public void clearActiveMobs() {
@@ -641,6 +691,7 @@ public class SpawnerManager {
             }
         }
         activeMobs.clear();
+        worldMobs.clear();
     }
 
     public void reloadAllSpawners() {
@@ -648,15 +699,25 @@ public class SpawnerManager {
         spawners.clear();
         loadSpawners();
         plugin.getLogger().info("Ricaricati tutti gli spawner dal file. Totale in memoria: " + spawners.size());
-
-        // Debug: elenca tutti gli spawner caricati
-        for (CustomSpawner spawner : spawners.values()) {
-            plugin.getLogger().info("Spawner in memoria: " + spawner.getName() + " (" + spawner.getSpawnerType() + ") nel mondo " +
-                    spawner.getLocation().getWorld().getName());
-        }
     }
 
     public Collection<CustomSpawner> getAllSpawners() {
         return spawners.values();
     }
-}
+
+    /**
+     * Restituisce i mondi con spawner attivi
+     */
+    public Set<String> getActiveWorlds() {
+        return activeWorlds.keySet();
+    }
+
+    /**
+     * Ferma tutti i task quando il plugin si disabilita
+     */
+    public void stopAllTasks() {
+        if (debugTask != null && !debugTask.isCancelled()) {
+            debugTask.cancel();
+        }
+
+        if (spawnerCheckTask != null && !spawnerCheckTask.i
