@@ -440,12 +440,27 @@ public class SpawnerManager {
     // Sostituisci il metodo showDebugParticles nella classe SpawnerManager con questo:
 
     /**
-     * Mostra le particelle di debug per uno spawner
+     * Mostra le particelle di debug per uno spawner (VERSIONE CORRETTA)
      */
     private void showDebugParticles(Player player, CustomSpawner spawner) {
         Location loc = spawner.getLocation();
+        Location playerLocation = player.getLocation();
 
-        if (!canCalculateDistance(player.getLocation(), loc) || player.getLocation().distance(loc) > 50) {
+        // ✅ AGGIUNTO: Usa il controllo di validità esistente
+        if (!canCalculateDistance(playerLocation, loc)) {
+            return;
+        }
+
+        // ✅ AGGIUNTO: Controllo distanza con gestione delle eccezioni
+        try {
+            double distance = playerLocation.distance(loc);
+            if (distance > 50) {
+                return; // Troppo lontano per mostrare le particelle
+            }
+        } catch (IllegalArgumentException e) {
+            // Se non si riesce a calcolare la distanza, non mostrare le particelle
+            plugin.getLogger().warning("Impossibile calcolare distanza per spawner " +
+                    spawner.getName() + ": " + e.getMessage());
             return;
         }
 
@@ -502,48 +517,49 @@ public class SpawnerManager {
 
                 Location particleLoc = new Location(loc.getWorld(), x, y, z);
 
+                // ✅ AGGIUNTO: Controllo validità location particelle
+                if (!isLocationValid(particleLoc)) {
+                    continue;
+                }
+
                 // Spawn particelle con gestione degli errori
                 try {
                     player.spawnParticle(particle, particleLoc, 1, 0, 0, 0, 0);
                 } catch (Exception e) {
                     // Se fallisce, usa una particella semplice
-                    player.spawnParticle(Particle.FLAME, particleLoc, 1, 0, 0, 0, 0);
+                    try {
+                        player.spawnParticle(Particle.FLAME, particleLoc, 1, 0, 0, 0, 0);
+                    } catch (Exception ex) {
+                        // Se anche questo fallisce, salta questa particella
+                        continue;
+                    }
                 }
             }
 
             // Particella centrale
-            try {
-                player.spawnParticle(particle, loc.clone().add(0, 1, 0), 3, 0.2, 0.2, 0.2, 0);
-            } catch (Exception e) {
-                // Se fallisce, usa una particella semplice
-                player.spawnParticle(Particle.FLAME, loc.clone().add(0, 1, 0), 3, 0.2, 0.2, 0.2, 0);
+            Location centralLoc = loc.clone().add(0, 1, 0);
+            if (isLocationValid(centralLoc)) {
+                try {
+                    player.spawnParticle(particle, centralLoc, 3, 0.2, 0.2, 0.2, 0);
+                } catch (Exception e) {
+                    // Se fallisce, usa una particella semplice
+                    try {
+                        player.spawnParticle(Particle.FLAME, centralLoc, 3, 0.2, 0.2, 0.2, 0);
+                    } catch (Exception ex) {
+                        // Se anche questo fallisce, non mostrare la particella centrale
+                    }
+                }
             }
 
         } catch (Exception e) {
-            // Log dell'errore e fallback
-            plugin.getLogger().warning("Errore nell'visualizzazione delle particelle per lo spawner " +
+            // Log dell'errore
+            plugin.getLogger().warning("Errore generale nella visualizzazione delle particelle per lo spawner " +
                     spawner.getName() + ": " + e.getMessage());
-
-            // Usa solo particelle semplici come fallback
-            try {
-                for (int i = 0; i < 8; i++) {
-                    double angle = 2 * Math.PI * i / 8;
-                    double x = loc.getX() + Math.cos(angle) * 1.5;
-                    double z = loc.getZ() + Math.sin(angle) * 1.5;
-                    double y = loc.getY() + 1;
-
-                    Location particleLoc = new Location(loc.getWorld(), x, y, z);
-                    player.spawnParticle(Particle.FLAME, particleLoc, 1);
-                }
-                player.spawnParticle(Particle.FLAME, loc.clone().add(0, 1, 0), 3);
-            } catch (Exception ex) {
-                // Se anche questo fallisce, disabilita le particelle per questo spawner
-                plugin.getLogger().severe("Impossibile visualizzare particelle per lo spawner " + spawner.getName());
-            }
         }
     }
+
     /**
-     * Verifica se una location è valida per i calcoli
+     * Verifica se una location è valida per i calcoli (VERSIONE MIGLIORATA)
      */
     private boolean isLocationValid(Location location) {
         if (location == null) {
@@ -555,11 +571,32 @@ public class SpawnerManager {
         }
 
         // Controlla che le coordinate non siano NaN o infinite
-        if (Double.isNaN(location.getX()) || Double.isNaN(location.getY()) || Double.isNaN(location.getZ())) {
+        double x = location.getX();
+        double y = location.getY();
+        double z = location.getZ();
+
+        if (Double.isNaN(x) || Double.isNaN(y) || Double.isNaN(z)) {
             return false;
         }
 
-        if (Double.isInfinite(location.getX()) || Double.isInfinite(location.getY()) || Double.isInfinite(location.getZ())) {
+        if (Double.isInfinite(x) || Double.isInfinite(y) || Double.isInfinite(z)) {
+            return false;
+        }
+
+        // ✅ AGGIUNTO: Controlla che le coordinate siano in un range ragionevole
+        // Minecraft ha limiti di circa ±30 milioni di blocchi
+        if (Math.abs(x) > 30000000 || Math.abs(y) > 30000000 || Math.abs(z) > 30000000) {
+            return false;
+        }
+
+        // ✅ AGGIUNTO: Controlla che il mondo sia caricato
+        try {
+            if (!location.getWorld().isChunkLoaded(location.getBlockX() >> 4, location.getBlockZ() >> 4)) {
+                // Il chunk non è caricato, ma la location potrebbe essere ancora valida
+                // Restituiamo true ma sarà il chiamante a decidere se procedere
+            }
+        } catch (Exception e) {
+            // Se non riusciamo a controllare il chunk, consideriamo la location non valida
             return false;
         }
 
@@ -567,7 +604,7 @@ public class SpawnerManager {
     }
 
     /**
-     * Verifica se è possibile calcolare la distanza tra due location (versione aggiornata)
+     * Verifica se è possibile calcolare la distanza tra due location (VERSIONE MIGLIORATA)
      */
     private boolean canCalculateDistance(Location loc1, Location loc2) {
         if (!isLocationValid(loc1) || !isLocationValid(loc2)) {
@@ -579,7 +616,24 @@ public class SpawnerManager {
             return false;
         }
 
-        return true;
+        // ✅ AGGIUNTO: Test di calcolo distanza per verificare che non ci siano problemi
+        try {
+            // Prova a calcolare la distanza al quadrato (più efficiente)
+            double distanceSquared = loc1.distanceSquared(loc2);
+
+            // Verifica che il risultato sia valido
+            if (Double.isNaN(distanceSquared) || Double.isInfinite(distanceSquared)) {
+                return false;
+            }
+
+            return true;
+        } catch (IllegalArgumentException e) {
+            // Se Bukkit solleva un'eccezione, non possiamo calcolare la distanza
+            return false;
+        } catch (Exception e) {
+            // Qualsiasi altro errore
+            return false;
+        }
     }
 
     /**
@@ -914,5 +968,24 @@ public class SpawnerManager {
      */
     public void stopDebugTask() {
         stopAllTasks();
+    }
+
+    /**
+     * Calcola la distanza tra due location in modo sicuro
+     * @param loc1 Prima location
+     * @param loc2 Seconda location
+     * @return La distanza, o -1 se non calcolabile
+     */
+    private double safeDistance(Location loc1, Location loc2) {
+        if (!canCalculateDistance(loc1, loc2)) {
+            return -1;
+        }
+
+        try {
+            return loc1.distance(loc2);
+        } catch (Exception e) {
+            plugin.getLogger().warning("Errore nel calcolo della distanza: " + e.getMessage());
+            return -1;
+        }
     }
 }
